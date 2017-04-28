@@ -21,7 +21,7 @@ import java.util.List;
 // 1: <cacfile>         CAR_CACHE_de_noCC.CAC
 // 2: <latitude>        49.46591000
 // 3: <longitude>       11.15800500
-// 4: <minutes>         15
+// 4: <sekunden>         15
 // 5: <fromLSI>         20505600
 // 6: <toLSI>           20505699
 public class Isochrone {
@@ -30,7 +30,7 @@ public class Isochrone {
     private final String cacFile;
     private final double latitude;
     private final double longitude;
-    private final int minutes;
+    private final int sekunden;
     private final int fromLSI;
     private final int toLSI;
     private final NavData navData;
@@ -43,7 +43,7 @@ public class Isochrone {
         cacFile = args[1];
         latitude = Double.parseDouble(args[2]);
         longitude = Double.parseDouble(args[3]);
-        minutes = Integer.parseInt(args[4]);
+        sekunden = Integer.parseInt(args[4]) * 60; // Übergeben werden Minuten
         fromLSI = Integer.parseInt(args[5]);
         toLSI = Integer.parseInt(args[6]);
 
@@ -69,8 +69,39 @@ public class Isochrone {
     }
 
     private List<Crossing> ermittleErreichbareCrossings(final Crossing startCrossing) {
-        //TODO
-        return null;
+        final List<Crossing> erreichbareCrossings = new ArrayList<>();
+        final List<Crossing> closed = new ArrayList<>();
+        final List<Crossing> open = new ArrayList<>();
+        open.add(startCrossing);
+        startCrossing.setKostenVonStart(0);
+        do {
+            final Crossing aktuell = startCrossing; //TODO Crossing mit minimalen f
+            open.remove(aktuell);
+            expand(closed, open, erreichbareCrossings, aktuell);
+            closed.add(aktuell);
+        } while (!open.isEmpty());
+        return erreichbareCrossings;
+    }
+
+    private void expand(final List<Crossing> closed, final List<Crossing> open,
+            final List<Crossing> erreichbareCrossings, final Crossing aktuell) {
+        for (final Crossing nachbar : aktuell.getNachbarn()) {
+            if(closed.contains(nachbar)){
+                continue;
+            }
+            int kostenZuNachbarn = nachbar.getKostenZuNachbar(nachbar);
+            int kostenVonStartzuNachbarn = aktuell.getKostenVonStart() + kostenZuNachbarn;
+            if(kostenVonStartzuNachbarn < nachbar.getKostenVonStart()){
+                nachbar.setKostenVonStart(kostenVonStartzuNachbarn);
+            }
+            // TODO Vorgänger merken?
+            if(nachbar.getKostenVonStart() <= sekunden){
+                open.add(nachbar);
+            }
+            //TODO impl
+//            int kostenStartBisKnotenAktuell = kostenStartBisKnoten + aktuell.getKostenZuNachbar(nachbar);
+//            int kostenGesamtGeschaetztAktuell = kostenStartBisKnotenAktuell +
+        }
     }
 
     private List<double[]> erzeugeKonkaveHuelle(final List<Crossing> erreichbareCrossings) {
