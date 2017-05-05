@@ -5,12 +5,16 @@ package lebr;
 
 import com.vividsolutions.jts.geom.Coordinate;
 import fu.util.ConcaveHullGenerator;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
+import javafx.collections.transformation.SortedList;
 import lebr.demo.NavDemo;
 import nav.NavData;
 import pp.dorenda.client2.additional.UniversalPainterWriter;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 // Testaufruf - dorenda:
@@ -21,7 +25,7 @@ import java.util.List;
 // 1: <cacfile>         CAR_CACHE_de_noCC.CAC
 // 2: <latitude>        49.46591000
 // 3: <longitude>       11.15800500
-// 4: <sekunden>         15
+// 4: <minuten>         15
 // 5: <fromLSI>         20505600
 // 6: <toLSI>           20505699
 public class Isochrone {
@@ -35,69 +39,97 @@ public class Isochrone {
     private final int toLSI;
     private final NavData navData;
 
+    public static void main(final String[] args) throws Exception {
+//        new Isochrone(args).run();
+        final String[] testargs = {"geosrv.informatik.fh-nuernberg.de/5432/dbuser/dbuser/deproDB20",
+                "CAR_CACHE_mittelfranken_noCC.CAC",
+                "49.46591000",
+                "11.15800500",
+                "1",
+                "20505600",
+                "20505699"
+        };
+        new Isochrone(testargs).run();
+    }
+
     public Isochrone(final String[] args) {
         if (args.length != 7) {
             throw new IllegalArgumentException(args.length + " Argumente übergeben; 7 erwartet!");
         }
         dbAccess = args[0];
         cacFile = args[1];
-        latitude = Double.parseDouble(args[2]);
-        longitude = Double.parseDouble(args[3]);
+        latitude = Double.parseDouble(args[2]) * 1000000;
+        longitude = Double.parseDouble(args[3]) * 1000000;
         sekunden = Integer.parseInt(args[4]) * 60; // Übergeben werden Minuten
         fromLSI = Integer.parseInt(args[5]);
         toLSI = Integer.parseInt(args[6]);
 
         try {
-            navData = new NavData(NavDemo.class.getResource("/CAR_CACHE_mittelfranken_noCC.CAC").getFile(), true);
+            navData = new NavData(NavDemo.class.getResource("/" + cacFile).getFile(), true);
         } catch (Exception e) {
             e.printStackTrace();
             throw new RuntimeException(e); //TODO
         }
     }
 
-    public static void main(String[] args) throws Exception {
-        new Isochrone(args).run();
-    }
-
     private void run() {
         final Crossing startCrossing = new Crossing(navData, Double.valueOf(latitude).intValue(),
                 Double.valueOf(longitude).intValue());
+        long start = System.currentTimeMillis();
+        System.out.println("Start: " + start);
         final List<Crossing> erreichbareCrossings = ermittleErreichbareCrossings(startCrossing);
+        System.out.println("erreichbareCrossing: " + (System.currentTimeMillis() - start));
+        start = System.currentTimeMillis();
         final List<double[]> konkaveHuelle = erzeugeKonkaveHuelle(erreichbareCrossings);
+        System.out.println("konkaveHuellen: " + (System.currentTimeMillis() - start));
         final List<Domain> erreichbareDomains = ermittleErreichbareDomains(konkaveHuelle);
         erzeugeKarte(startCrossing, konkaveHuelle, erreichbareDomains); //TODO startcrossing oder übergebene koords?
     }
 
     private List<Crossing> ermittleErreichbareCrossings(final Crossing startCrossing) {
+        System.out.println("ermittleErreichbareCrossings Anfang");
         final List<Crossing> erreichbareCrossings = new ArrayList<>();
+        erreichbareCrossings.add(startCrossing);
         final List<Crossing> closed = new ArrayList<>();
-        final List<Crossing> open = new ArrayList<>();
-        open.add(startCrossing);
+        final ObservableList<Crossing> open = FXCollections.observableArrayList(startCrossing);
+        final SortedList<Crossing> openSorted = open.sorted((o1, o2)
+                -> Double.compare(o1.getKostenVonStart(), o2.getKostenVonStart()));
         startCrossing.setKostenVonStart(0);
         do {
-            final Crossing aktuell = startCrossing; //TODO Crossing mit minimalen f
+            System.out.println("Open:" + open.size());
+            System.out.println("Open:" + open);
+            System.out.println("Closed:" + closed.size());
+            System.out.println("closed:" + closed);
+            System.out.println("errei:" + erreichbareCrossings.size());
+            System.out.println("errei:" + erreichbareCrossings);
+            final Crossing aktuell = openSorted.get(0);
             open.remove(aktuell);
             expand(closed, open, erreichbareCrossings, aktuell);
             closed.add(aktuell);
         } while (!open.isEmpty());
+        System.out.println("ermittleErreichbareCrossings Ende");
         return erreichbareCrossings;
     }
 
     private void expand(final List<Crossing> closed, final List<Crossing> open,
             final List<Crossing> erreichbareCrossings, final Crossing aktuell) {
+        System.out.println("expand");
         for (final Crossing nachbar : aktuell.getNachbarn()) {
-            if(closed.contains(nachbar)){
+            System.out.println("expand nachbar");
+            if (closed.contains(nachbar)) {
                 continue;
             }
-            int kostenZuNachbarn = nachbar.getKostenZuNachbar(nachbar);
-            int kostenVonStartzuNachbarn = aktuell.getKostenVonStart() + kostenZuNachbarn;
-            if(kostenVonStartzuNachbarn < nachbar.getKostenVonStart()){
+            double kostenZuNachbarn = aktuell.getKostenZuNachbar(nachbar);
+            double kostenVonStartzuNachbarn = aktuell.getKostenVonStart() + kostenZuNachbarn;
+            if (kostenVonStartzuNachbarn < nachbar.getKostenVonStart()) {
                 nachbar.setKostenVonStart(kostenVonStartzuNachbarn);
             }
             // TODO Vorgänger merken?
-            if(nachbar.getKostenVonStart() <= sekunden){
-                open.add(nachbar);
+            if (open.contains(nachbar) && nachbar.getKostenVonStart() > sekunden) {
+                continue;
             }
+            open.add(nachbar);
+            erreichbareCrossings.add(nachbar);
             //TODO impl
 //            int kostenStartBisKnotenAktuell = kostenStartBisKnoten + aktuell.getKostenZuNachbar(nachbar);
 //            int kostenGesamtGeschaetztAktuell = kostenStartBisKnotenAktuell +

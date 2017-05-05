@@ -9,7 +9,7 @@ public class Crossing {
 
     private final int id;
     private final NavData navData;
-    private int kostenVonStart = Integer.MAX_VALUE;
+    private double kostenVonStart = Integer.MAX_VALUE;
 
     public Crossing(final NavData navData, final int latitude, final int longitude) {
         this.navData = navData;
@@ -54,15 +54,15 @@ public class Crossing {
         return nachbarn;
     }
 
-    public int getKostenVonStart() {
+    public double getKostenVonStart() {
         return kostenVonStart;
     }
 
-    public void setKostenVonStart(final int kostenVonStart) {
+    public void setKostenVonStart(final double kostenVonStart) {
         this.kostenVonStart = kostenVonStart;
     }
 
-    public int getKostenZuNachbar(final Crossing nachbar) {
+    public double getKostenZuNachbar(final Crossing nachbar) {
         final int[] linksForCrossing = navData.getLinksForCrossing(id);
         for (int linkId : linksForCrossing) {
             final Link link = new Link(linkId, navData);

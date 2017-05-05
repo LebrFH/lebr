@@ -22,10 +22,12 @@ public class Link {
         return new Crossing(crossingIDTo, navData);
     }
 
-    public int getKosten(){
+    public double getKosten(){
         final int laenge = navData.getLengthMeters(id);
-        final int geschwindigkeit = navData.getMaxSpeedKMperHours(id) * 1000; // Meter pro Stunde
-        final int kostenInStunden = laenge / geschwindigkeit;
-        return kostenInStunden * 3600;
+        double maxGeschwindigkeit = navData.getMaxSpeedKMperHours(id) / 3.6; // Meter pro Sekunde
+        if(maxGeschwindigkeit == 0){
+            maxGeschwindigkeit = 100;
+        }
+        return laenge / maxGeschwindigkeit;
     }
 }
