@@ -45,7 +45,7 @@ public class Isochrone {
                 "CAR_CACHE_mittelfranken_noCC.CAC",
                 "49.46591000",
                 "11.15800500",
-                "1",
+                "10",
                 "20505600",
                 "20505699"
         };
@@ -76,18 +76,17 @@ public class Isochrone {
         final Crossing startCrossing = new Crossing(navData, Double.valueOf(latitude).intValue(),
                 Double.valueOf(longitude).intValue());
         long start = System.currentTimeMillis();
-        System.out.println("Start: " + start);
+        System.out.println("erreichbareCrossing - start...");
         final List<Crossing> erreichbareCrossings = ermittleErreichbareCrossings(startCrossing);
-        System.out.println("erreichbareCrossing: " + (System.currentTimeMillis() - start));
+        System.out.println("erreichbareCrossing: " + (System.currentTimeMillis() - start) + " ms");
         start = System.currentTimeMillis();
         final List<double[]> konkaveHuelle = erzeugeKonkaveHuelle(erreichbareCrossings);
-        System.out.println("konkaveHuellen: " + (System.currentTimeMillis() - start));
+        System.out.println("konkaveHuellen: " + (System.currentTimeMillis() - start) + " ms");
         final List<Domain> erreichbareDomains = ermittleErreichbareDomains(konkaveHuelle);
         erzeugeKarte(startCrossing, konkaveHuelle, erreichbareDomains); //TODO startcrossing oder übergebene koords?
     }
 
     private List<Crossing> ermittleErreichbareCrossings(final Crossing startCrossing) {
-        System.out.println("ermittleErreichbareCrossings Anfang");
         final List<Crossing> erreichbareCrossings = new ArrayList<>();
         erreichbareCrossings.add(startCrossing);
         final List<Crossing> closed = new ArrayList<>();
@@ -96,12 +95,6 @@ public class Isochrone {
                 -> Double.compare(o1.getKostenVonStart(), o2.getKostenVonStart()));
         startCrossing.setKostenVonStart(0);
         do {
-            System.out.println("Open:" + open.size());
-            System.out.println("Open:" + open);
-            System.out.println("Closed:" + closed.size());
-            System.out.println("closed:" + closed);
-            System.out.println("errei:" + erreichbareCrossings.size());
-            System.out.println("errei:" + erreichbareCrossings);
             final Crossing aktuell = openSorted.get(0);
             open.remove(aktuell);
             expand(closed, open, erreichbareCrossings, aktuell);
@@ -113,9 +106,7 @@ public class Isochrone {
 
     private void expand(final List<Crossing> closed, final List<Crossing> open,
             final List<Crossing> erreichbareCrossings, final Crossing aktuell) {
-        System.out.println("expand");
         for (final Crossing nachbar : aktuell.getNachbarn()) {
-            System.out.println("expand nachbar");
             if (closed.contains(nachbar)) {
                 continue;
             }
@@ -125,7 +116,7 @@ public class Isochrone {
                 nachbar.setKostenVonStart(kostenVonStartzuNachbarn);
             }
             // TODO Vorgänger merken?
-            if (open.contains(nachbar) && nachbar.getKostenVonStart() > sekunden) {
+            if (open.contains(nachbar) || nachbar.getKostenVonStart() > sekunden) {
                 continue;
             }
             open.add(nachbar);
