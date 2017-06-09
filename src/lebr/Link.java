@@ -28,6 +28,6 @@ public class Link {
         if(maxGeschwindigkeit == 0){
             maxGeschwindigkeit = 100;
         }
-        return laenge / maxGeschwindigkeit;
+        return (laenge / maxGeschwindigkeit) * 1.33;
     }
 }
