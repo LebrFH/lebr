@@ -13,9 +13,6 @@ import fu.esi.SQL;
 import fu.keys.LSIClassCentreDB;
 import fu.util.ConcaveHullGenerator;
 import fu.util.DBUtil;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
-import javafx.collections.transformation.SortedList;
 import lebr.demo.NavDemo;
 import nav.NavData;
 import pp.dorenda.client2.additional.UniversalPainterWriter;
@@ -27,8 +24,8 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.List;
+import java.util.PriorityQueue;
 
 // Testaufruf - dorenda:
 // java -cp .;geo.jar pp.dorenda.client2.testapp.TestActivity  -m webservice;geosrv.informatik.fh-nuernberg.de  -c pp.dorenda.client2.additional.UniversalPainter -a result.txt;s
@@ -88,42 +85,41 @@ public class Isochrone {
     private void run() {
         final Crossing startCrossing = new Crossing(navData, Double.valueOf(latitude).intValue(),
                 Double.valueOf(longitude).intValue());
-        long start = System.currentTimeMillis();
-        System.out.println("erreichbareCrossing - start...");
         final List<Crossing> erreichbareCrossings = ermittleErreichbareCrossings(startCrossing);
-        System.out.println("erreichbareCrossing: " + (System.currentTimeMillis() - start) + " ms");
-        start = System.currentTimeMillis();
         final List<double[]> konkaveHuelle = erzeugeKonkaveHuelle(erreichbareCrossings);
-        System.out.println("konkaveHuellen: " + (System.currentTimeMillis() - start) + " ms");
         final List<Domain> erreichbareDomains;
         try {
             erreichbareDomains = ermittleErreichbareDomains(konkaveHuelle);
         } catch (SQLException | ParseException e) {
             throw new RuntimeException(e);
         }
-        System.out.println("Anzahl erreichbare Domains " + erreichbareDomains.size());
         erzeugeKarte(startCrossing, konkaveHuelle, erreichbareDomains); //TODO startcrossing oder übergebene koords?
     }
 
     private List<Crossing> ermittleErreichbareCrossings(final Crossing startCrossing) {
+        final Timer timer = Timer.start("ermittleErreichbareCrossings");
+
         final List<Crossing> erreichbareCrossings = new ArrayList<>();
         erreichbareCrossings.add(startCrossing);
         final List<Crossing> closed = new ArrayList<>();
-        final ObservableList<Crossing> open = FXCollections.observableArrayList(startCrossing);
-        final SortedList<Crossing> openSorted = open.sorted((o1, o2)
+
+        final PriorityQueue<Crossing> queue = new PriorityQueue<>((o1, o2)
                 -> Double.compare(o1.getKostenVonStart(), o2.getKostenVonStart()));
+        queue.add(startCrossing);
+
         startCrossing.setKostenVonStart(0);
         do {
-            final Crossing aktuell = openSorted.get(0);
-            open.remove(aktuell);
-            expand(closed, open, erreichbareCrossings, aktuell);
+            final Crossing aktuell = queue.poll();
+            expand(closed, queue, erreichbareCrossings, aktuell);
             closed.add(aktuell);
-        } while (!open.isEmpty());
-        System.out.println("ermittleErreichbareCrossings Ende");
+        } while (!queue.isEmpty());
+
+        timer.stop();
+        System.out.println("Anzahl erreichbarer Crossings: " + erreichbareCrossings.size());
         return erreichbareCrossings;
     }
 
-    private void expand(final List<Crossing> closed, final List<Crossing> open,
+    private void expand(final List<Crossing> closed, final PriorityQueue<Crossing> open,
             final List<Crossing> erreichbareCrossings, final Crossing aktuell) {
         for (final Crossing nachbar : aktuell.getNachbarn()) {
             if (closed.contains(nachbar)) {
@@ -147,16 +143,20 @@ public class Isochrone {
     }
 
     private List<double[]> erzeugeKonkaveHuelle(final List<Crossing> erreichbareCrossings) {
+        final Timer timer = Timer.start("erzeugeKonkaveHuelle");
         final ArrayList<double[]> demoPoints = new ArrayList<>();
         for (final Crossing crossing : erreichbareCrossings) {
             double lon = crossing.getLongitude() / 1000000.0;
             double lat = crossing.getLatitude() / 1000000.0;
             demoPoints.add(new double[]{lon, lat});
         }
+
+        timer.stop();
         return ConcaveHullGenerator.concaveHull(demoPoints, 1.0d); //TODO parameter anpassne
     }
 
     private List<Domain> ermittleErreichbareDomains(final List<double[]> konkaveHuelle) throws SQLException, ParseException {
+        final Timer timer = Timer.start("ermittleErreichbareDomains");
         final Coordinate[] coords = new Coordinate[konkaveHuelle.size()];
         for (int i = 0; i < konkaveHuelle.size(); i++) {
             final double[] doubles = konkaveHuelle.get(i);
@@ -189,7 +189,7 @@ public class Isochrone {
 //        fromLSI = lcStrassen[0];
 //        toLSI = lcStrassen[1];
 
-        resultSet = statement.executeQuery("SELECT realname, geodata_line FROM domain WHERE geometry='L' AND lsiclass1 BETWEEN " + fromLSI + " AND " + toLSI + " AND" +
+        resultSet = statement.executeQuery("SELECT realname, gao_geometry FROM domain WHERE geometry='P' AND lsiclass1 BETWEEN " + fromLSI + " AND " + toLSI + " AND" +
                 SQL.createIndexQuery(boundingBox.getMinX(), boundingBox.getMaxY(), boundingBox.getMaxX(), boundingBox.getMinY(), SQL.COMPLETELY_INSIDE)
         );
 
@@ -203,17 +203,21 @@ public class Isochrone {
             if (geom.within(polygon)) {                       // Exact geometrisch testen, ob die Geometry im Dreieck liegt
 //                dumpGeometry(geom);
 //                domains.add(new Domain(realname, geom));
-                final int latitude = Double.valueOf(geom.getCentroid().getX()).intValue();
-                final int longitude = Double.valueOf(geom.getCentroid().getY()).intValue();
+                final int latitude = Double.valueOf(geom.getCentroid().getY()).intValue();
+                final int longitude = Double.valueOf(geom.getCentroid().getX()).intValue();
                 domains.add(new Domain(realname, latitude, longitude));
             }
         }
         resultSet.close();
+
+        timer.stop();
+        System.out.println("Anzahl erreichbarer Domains: " + domains.size());
         return domains;
     }
 
 
     private void erzeugeKarte(final Crossing startCrossing, final List<double[]> konkaveHuelle, final List<Domain> erreichbareDomains) {
+        final Timer timer = Timer.start("erzeugeKarte");
         try {
             UniversalPainterWriter upw = new UniversalPainterWriter("result.txt");
 
@@ -246,6 +250,7 @@ public class Isochrone {
             e.printStackTrace();
             throw new RuntimeException("TODO"); //TODO
         }
+        timer.stop();
     }
 
     static <T> T[] upsizeArray(T[] arr, T element) {
