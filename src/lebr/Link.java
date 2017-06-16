@@ -56,6 +56,7 @@ public class Link {
         final int laenge = navData.getLengthMeters(id);
         double maxGeschwindigkeit = getSpeed();
         if (maxGeschwindigkeit == 0) {
+            //TODO geschw anhand lsiclass
             maxGeschwindigkeit = 100;
         }
         return (laenge / maxGeschwindigkeit) * 1.33;
