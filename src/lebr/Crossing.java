@@ -3,20 +3,37 @@ package lebr;
 import nav.NavData;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class Crossing {
+
+    private static final Map<Integer, Crossing> cache = new HashMap<>();
+
+    boolean closed = false;
 
     private final int id;
     private final NavData navData;
     private double kostenVonStart = Integer.MAX_VALUE;
 
+    public static Crossing newCrossing(int id, NavData navData){
+        final Crossing crossing = cache.get(id);
+        if(crossing != null){
+            return crossing;
+        }
+        final Crossing newCrossing = new Crossing(id, navData);
+        cache.put(id, newCrossing);
+        return newCrossing;
+    }
+
     public Crossing(final NavData navData, final int latitude, final int longitude) {
         this.navData = navData;
         this.id = navData.getNearestCrossing(latitude, longitude);
+        cache.put(this.id, this);
     }
 
-    public Crossing(final int id, final NavData navData) {
+    private Crossing(final int id, final NavData navData) {
         this.id = id;
         this.navData = navData;
     }
@@ -25,7 +42,7 @@ public class Crossing {
         final List<Link> links = new ArrayList<>();
         final int[] linksForCrossing = navData.getLinksForCrossing(id);
         for (final int linkId : linksForCrossing) {
-            links.add(new Link(linkId, navData));
+            links.add(Link.newLink(linkId, navData));
         }
         return links;
     }
@@ -44,7 +61,7 @@ public class Crossing {
 
         final int[] linkIds = navData.getLinksForCrossing(id);
         for (int linkId : linkIds) {
-            final Link link = new Link(linkId, navData);
+            final Link link = Link.newLink(linkId, navData);
             if (!link.getFrom().equals(this)) {
                 nachbarn.add(link.getFrom());
             } else if (!link.getTo().equals(this)) {
@@ -65,7 +82,7 @@ public class Crossing {
     public double getKostenZuNachbar(final Crossing nachbar) {
         final int[] linksForCrossing = navData.getLinksForCrossing(id);
         for (int linkId : linksForCrossing) {
-            final Link link = new Link(linkId, navData);
+            final Link link = Link.newLink(linkId, navData);
             if (link.getFrom().equals(nachbar) || link.getTo().equals(nachbar)) {
                 return link.getKosten();
             }

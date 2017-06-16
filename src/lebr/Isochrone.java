@@ -55,7 +55,7 @@ public class Isochrone {
                 "CAR_CACHE_mittelfranken_noCC.CAC",
                 "49.46591000",
                 "11.15800500",
-                "15",
+                "30",
                 "20505600",
                 "20505699"
         };
@@ -101,7 +101,6 @@ public class Isochrone {
 
         final List<Crossing> erreichbareCrossings = new ArrayList<>();
         erreichbareCrossings.add(startCrossing);
-        final List<Crossing> closed = new ArrayList<>();
 
         final PriorityQueue<Crossing> queue = new PriorityQueue<>((o1, o2)
                 -> Double.compare(o1.getKostenVonStart(), o2.getKostenVonStart()));
@@ -110,8 +109,8 @@ public class Isochrone {
         startCrossing.setKostenVonStart(0);
         do {
             final Crossing aktuell = queue.poll();
-            expand(closed, queue, erreichbareCrossings, aktuell);
-            closed.add(aktuell);
+            expand(queue, erreichbareCrossings, aktuell);
+            aktuell.closed = true;
         } while (!queue.isEmpty());
 
         timer.stop();
@@ -119,10 +118,10 @@ public class Isochrone {
         return erreichbareCrossings;
     }
 
-    private void expand(final List<Crossing> closed, final PriorityQueue<Crossing> open,
+    private void expand(final PriorityQueue<Crossing> open,
             final List<Crossing> erreichbareCrossings, final Crossing aktuell) {
         for (final Crossing nachbar : aktuell.getNachbarn()) {
-            if (closed.contains(nachbar)) {
+            if (nachbar.closed) {
                 continue;
             }
             double kostenZuNachbarn = aktuell.getKostenZuNachbar(nachbar);
@@ -151,8 +150,9 @@ public class Isochrone {
             demoPoints.add(new double[]{lon, lat});
         }
 
+        final ArrayList<double[]> concaveHull = ConcaveHullGenerator.concaveHull(demoPoints, 1.0d);//TODO parameter anpassne
         timer.stop();
-        return ConcaveHullGenerator.concaveHull(demoPoints, 1.0d); //TODO parameter anpassne
+        return concaveHull;
     }
 
     private List<Domain> ermittleErreichbareDomains(final List<double[]> konkaveHuelle) throws SQLException, ParseException {
@@ -203,8 +203,8 @@ public class Isochrone {
             if (geom.within(polygon)) {                       // Exact geometrisch testen, ob die Geometry im Dreieck liegt
 //                dumpGeometry(geom);
 //                domains.add(new Domain(realname, geom));
-                final int latitude = Double.valueOf(geom.getCentroid().getY()).intValue();
-                final int longitude = Double.valueOf(geom.getCentroid().getX()).intValue();
+                final double latitude = geom.getCentroid().getY();
+                final double longitude = geom.getCentroid().getX();
                 domains.add(new Domain(realname, latitude, longitude));
             }
         }
@@ -242,7 +242,7 @@ public class Isochrone {
             upw.line(huelle, 0, 255, 0, 200, 4, 3, "Start", "...Route...", "End");
 
             for (Domain domain : erreichbareDomains) {
-                upw.flag(domain.getLatitude(), domain.getLongitude(), 5, 5, 5, 5, domain.getName());
+                upw.flag(domain.getLatitude(), domain.getLongitude(), 255, 0, 0, 255, domain.getName());
             }
             upw.close();
 

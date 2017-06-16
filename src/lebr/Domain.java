@@ -12,7 +12,7 @@ public class Domain {
         this.geometry = geometry;
     }
 
-    public Domain(final String name, int latitude, int longitude) {
+    public Domain(final String name, double latitude, double longitude) {
         this.name = name;
         this.latitude = latitude;
         this.longitude = longitude;
@@ -26,22 +26,22 @@ public class Domain {
         return geometry;
     }
 
-    private int latitude;
-    private int longitude;
+    private double latitude;
+    private double longitude;
 
-    public int getLatitude() {
+    public double getLatitude() {
         return latitude;
     }
 
-    public int getLongitude() {
+    public double getLongitude() {
         return longitude;
     }
 
-    public void setLatitude(int latitude) {
+    public void setLatitude(double latitude) {
         this.latitude = latitude;
     }
 
-    public void setLongitude(int longitude) {
+    public void setLongitude(double longitude) {
         this.longitude = longitude;
     }
 
