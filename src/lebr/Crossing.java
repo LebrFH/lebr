@@ -7,7 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class Crossing {
+public class Crossing implements Punkt {
 
     private static final Map<Integer, Crossing> cache = new HashMap<>();
 
@@ -47,12 +47,27 @@ public class Crossing {
         return links;
     }
 
-    public int getLatitude() {
-        return navData.getCrossingLatE6(id);
+    public Link getLinkZuNachbar(final Crossing nachbar){
+        final List<Link> links = getLinks();
+        for (final Link link : links) {
+            if(link.getTo().equals(nachbar)){
+                return link;
+            }
+            if(link.getFrom().equals(nachbar)){
+                return link.getReverseLink();
+            }
+        }
+        return null;
     }
 
-    public int getLongitude() {
-        return navData.getCrossingLongE6(id);
+    @Override
+    public double getLatitude() {
+        return navData.getCrossingLatE6(id) / 1000000.0;
+    }
+
+    @Override
+    public double getLongitude() {
+        return navData.getCrossingLongE6(id) / 1000000.0;
     }
 
     //TODO Einbahnstraßen?

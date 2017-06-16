@@ -12,9 +12,9 @@ public class Link {
     private final int id;
     private final NavData navData;
 
-    public static Link newLink(int id, NavData navData){
-        final Link link= cache.get(id);
-        if(link != null){
+    public static Link newLink(int id, NavData navData) {
+        final Link link = cache.get(id);
+        if (link != null) {
             return link;
         }
         final Link newLink = new Link(id, navData);
@@ -27,22 +27,45 @@ public class Link {
         this.navData = navData;
     }
 
-    public Crossing getFrom(){
+    public Crossing getFrom() {
         final int crossingIDFrom = navData.getCrossingIDFrom(id);
         return Crossing.newCrossing(crossingIDFrom, navData);
     }
 
-    public Crossing getTo(){
+    public Crossing getTo() {
         final int crossingIDTo = navData.getCrossingIDTo(id);
         return Crossing.newCrossing(crossingIDTo, navData);
     }
 
-    public double getKosten(){
+    public double[][] getGeometriepunkte() {
+        final int domainID = navData.getDomainID(id);
+        final double[] domainLongsE6 = toDoubleArray(navData.getDomainLongsE6(domainID));
+        final double[] domainLatsE6 = toDoubleArray(navData.getDomainLatsE6(domainID));
+        return new double[][]{domainLongsE6, domainLatsE6};
+    }
+
+    private double[] toDoubleArray(final int[] intArray) {
+        final double[] doubleArray = new double[intArray.length];
+        for (int i = 0; i < intArray.length; i++) {
+            doubleArray[i] = intArray[i] / 1000000.0;
+        }
+        return doubleArray;
+    }
+
+    public double getKosten() {
         final int laenge = navData.getLengthMeters(id);
-        double maxGeschwindigkeit = navData.getMaxSpeedKMperHours(id) / 3.6; // Meter pro Sekunde
-        if(maxGeschwindigkeit == 0){
+        double maxGeschwindigkeit = getSpeed();
+        if (maxGeschwindigkeit == 0) {
             maxGeschwindigkeit = 100;
         }
         return (laenge / maxGeschwindigkeit) * 1.33;
+    }
+
+    public double getSpeed() {
+        return navData.getMaxSpeedKMperHours(id) / 3.6; // Meter pro Sekunde
+    }
+
+    public Link getReverseLink() {
+        return newLink(navData.getReverseLink(id), navData);
     }
 }

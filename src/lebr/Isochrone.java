@@ -13,6 +13,7 @@ import fu.esi.SQL;
 import fu.keys.LSIClassCentreDB;
 import fu.util.ConcaveHullGenerator;
 import fu.util.DBUtil;
+import javafx.util.Pair;
 import lebr.demo.NavDemo;
 import nav.NavData;
 import pp.dorenda.client2.additional.UniversalPainterWriter;
@@ -55,7 +56,7 @@ public class Isochrone {
                 "CAR_CACHE_mittelfranken_noCC.CAC",
                 "49.46591000",
                 "11.15800500",
-                "30",
+                "10",
                 "20505600",
                 "20505699"
         };
@@ -85,7 +86,7 @@ public class Isochrone {
     private void run() {
         final Crossing startCrossing = new Crossing(navData, Double.valueOf(latitude).intValue(),
                 Double.valueOf(longitude).intValue());
-        final List<Crossing> erreichbareCrossings = ermittleErreichbareCrossings(startCrossing);
+        final List<Punkt> erreichbareCrossings = ermittleErreichbareCrossings(startCrossing);
         final List<double[]> konkaveHuelle = erzeugeKonkaveHuelle(erreichbareCrossings);
         final List<Domain> erreichbareDomains;
         try {
@@ -96,11 +97,11 @@ public class Isochrone {
         erzeugeKarte(startCrossing, konkaveHuelle, erreichbareDomains); //TODO startcrossing oder übergebene koords?
     }
 
-    private List<Crossing> ermittleErreichbareCrossings(final Crossing startCrossing) {
+    private List<Punkt> ermittleErreichbareCrossings(final Crossing startCrossing) {
         final Timer timer = Timer.start("ermittleErreichbareCrossings");
 
-        final List<Crossing> erreichbareCrossings = new ArrayList<>();
-        erreichbareCrossings.add(startCrossing);
+        final List<Punkt> erreichbarePunkte = new ArrayList<>();
+        erreichbarePunkte.add(startCrossing);
 
         final PriorityQueue<Crossing> queue = new PriorityQueue<>((o1, o2)
                 -> Double.compare(o1.getKostenVonStart(), o2.getKostenVonStart()));
@@ -109,17 +110,17 @@ public class Isochrone {
         startCrossing.setKostenVonStart(0);
         do {
             final Crossing aktuell = queue.poll();
-            expand(queue, erreichbareCrossings, aktuell);
+            expand(queue, erreichbarePunkte, aktuell);
             aktuell.closed = true;
         } while (!queue.isEmpty());
 
         timer.stop();
-        System.out.println("Anzahl erreichbarer Crossings: " + erreichbareCrossings.size());
-        return erreichbareCrossings;
+        System.out.println("Anzahl erreichbarer Crossings: " + erreichbarePunkte.size());
+        return erreichbarePunkte;
     }
 
     private void expand(final PriorityQueue<Crossing> open,
-            final List<Crossing> erreichbareCrossings, final Crossing aktuell) {
+            final List<Punkt> erreichbarePunkte, final Crossing aktuell) {
         for (final Crossing nachbar : aktuell.getNachbarn()) {
             if (nachbar.closed) {
                 continue;
@@ -129,28 +130,52 @@ public class Isochrone {
             if (kostenVonStartzuNachbarn < nachbar.getKostenVonStart()) {
                 nachbar.setKostenVonStart(kostenVonStartzuNachbarn);
             }
-            // TODO Vorgänger merken?
-            if (open.contains(nachbar) || nachbar.getKostenVonStart() > sekunden) {
+            if (open.contains(nachbar)) {
+                continue;
+            }
+            if (nachbar.getKostenVonStart() > sekunden) {
+                crossingListeStart.add(aktuell);
+                crossingListeEnde.add(nachbar);
+
+
+                final Link linkZuNachbar = aktuell.getLinkZuNachbar(nachbar);
+                final double[][] geometriepunkte = linkZuNachbar.getGeometriepunkte();
+                final double[] longs = geometriepunkte[0];
+                final double[] lats = geometriepunkte[1];
+
+                for (int i = 0; i < longs.length - 1; i++) {
+                    final GeometriePunkt gp = new GeometriePunkt(lats[i], longs[i]);
+                    if (aktuell.getKostenVonStart() + gp.getKostenZuPunkt(lats[i], longs[i], linkZuNachbar.getSpeed() / 1.33) <= sekunden) { //TODO speed param
+                        erreichbarePunkte.add(gp);
+                        geometriePunkteListe.add(new Pair<>(lats[i], longs[i]));
+                    }
+                }
+
+
                 continue;
             }
             open.add(nachbar);
-            erreichbareCrossings.add(nachbar);
-            //TODO impl
-//            int kostenStartBisKnotenAktuell = kostenStartBisKnoten + aktuell.getKostenZuNachbar(nachbar);
-//            int kostenGesamtGeschaetztAktuell = kostenStartBisKnotenAktuell +
+            erreichbarePunkte.add(nachbar);
         }
     }
 
-    private List<double[]> erzeugeKonkaveHuelle(final List<Crossing> erreichbareCrossings) {
+    boolean b = true;
+
+    //TODO
+    List<Pair<Double, Double>> geometriePunkteListe = new ArrayList<>();
+    List<Crossing> crossingListeStart = new ArrayList<>();
+    List<Crossing> crossingListeEnde = new ArrayList<>();
+
+    private List<double[]> erzeugeKonkaveHuelle(final List<Punkt> erreichbareCrossings) {
         final Timer timer = Timer.start("erzeugeKonkaveHuelle");
         final ArrayList<double[]> demoPoints = new ArrayList<>();
-        for (final Crossing crossing : erreichbareCrossings) {
-            double lon = crossing.getLongitude() / 1000000.0;
-            double lat = crossing.getLatitude() / 1000000.0;
+        for (final Punkt punkt : erreichbareCrossings) {
+            double lon = punkt.getLongitude();
+            double lat = punkt.getLatitude();
             demoPoints.add(new double[]{lon, lat});
         }
 
-        final ArrayList<double[]> concaveHull = ConcaveHullGenerator.concaveHull(demoPoints, 1.0d);//TODO parameter anpassne
+        final ArrayList<double[]> concaveHull = ConcaveHullGenerator.concaveHull(demoPoints, 0.1d);//TODO parameter anpassne
         timer.stop();
         return concaveHull;
     }
@@ -240,10 +265,19 @@ public class Isochrone {
             ArrayList huelle = (ArrayList) konkaveHuelle;
             //upw.line(lats,longs,0,255,0,200,4,3,"Start","...Route...","End");
             upw.line(huelle, 0, 255, 0, 200, 4, 3, "Start", "...Route...", "End");
-
             for (Domain domain : erreichbareDomains) {
                 upw.flag(domain.getLatitude(), domain.getLongitude(), 255, 0, 0, 255, domain.getName());
             }
+            for (Pair<Double, Double> pair : geometriePunkteListe) {
+                upw.flag(pair.getKey(), pair.getValue(), 0, 255, 0, 120, "GP");
+            }
+            for (Crossing c : crossingListeStart) {
+                upw.flag(c.getLatitude() / 1000000.0, c.getLongitude() / 1000000.0, 0, 0, 255, 255, "S");
+            }
+            for (Crossing c : crossingListeEnde) {
+                upw.flag(c.getLatitude() / 1000000.0, c.getLongitude() / 1000000.0, 0, 0, 0, 255, "E");
+            }
+
             upw.close();
 
         } catch (IOException e) {
