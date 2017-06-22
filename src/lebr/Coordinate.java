@@ -1,9 +1,6 @@
 package lebr;
 
-/**
- * Created by Philipp on 16.06.2017.
- */
-public interface Punkt {
+public interface Coordinate {
 
     double getLatitude();
     double getLongitude();

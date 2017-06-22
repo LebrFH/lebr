@@ -3,7 +3,6 @@ package lebr;
 // Testaufruf:
 // java -cp geo.jar;lebr.jar lebr.Isochrone geosrv.informatik.fh-nuernberg.de/5432/dbuser/dbuser/deproDB20 CAR_CACHE_de_noCC.CAC 49.46591000 11.15800500 15 20505600 20505699
 
-import com.vividsolutions.jts.geom.Coordinate;
 import com.vividsolutions.jts.geom.Envelope;
 import com.vividsolutions.jts.geom.Geometry;
 import com.vividsolutions.jts.geom.GeometryFactory;
@@ -13,7 +12,6 @@ import fu.esi.SQL;
 import fu.keys.LSIClassCentreDB;
 import fu.util.ConcaveHullGenerator;
 import fu.util.DBUtil;
-import javafx.util.Pair;
 import lebr.demo.NavDemo;
 import nav.NavData;
 import pp.dorenda.client2.additional.UniversalPainterWriter;
@@ -41,195 +39,148 @@ import java.util.PriorityQueue;
 // 6: <toLSI>           20505699
 public class Isochrone {
 
-    private final String dbAccess;
-    private final String cacFile;
-    private final double latitude;
-    private final double longitude;
-    private final int sekunden;
-    private int fromLSI;
-    private int toLSI;
-    private final NavData navData;
+    private final Params params;
 
     public static void main(final String[] args) throws Exception {
-//        new Isochrone(args).run();
-        final String[] testargs = {"geosrv.informatik.fh-nuernberg.de/5432/dbuser/dbuser/deproDB20",
-                "CAR_CACHE_mittelfranken_noCC.CAC",
-                "49.46591000",
-                "11.15800500",
-                "10",
-                "20505600",
-                "20505699"
-        };
-        new Isochrone(testargs).run();
+//        new Isochrone(new Params(args)).run();
+        //TODO Testaufruf
+        new Isochrone(Params.TEST_PARAMS).run();
     }
 
-    public Isochrone(final String[] args) {
-        if (args.length != 7) {
-            throw new IllegalArgumentException(args.length + " Argumente übergeben; 7 erwartet!");
-        }
-        dbAccess = args[0];
-        cacFile = args[1];
-        latitude = Double.parseDouble(args[2]) * 1000000;
-        longitude = Double.parseDouble(args[3]) * 1000000;
-        sekunden = Integer.parseInt(args[4]) * 60; // Übergeben werden Minuten
-        fromLSI = Integer.parseInt(args[5]);
-        toLSI = Integer.parseInt(args[6]);
-
+    public Isochrone(final Params params) {
+        this.params = params;
         try {
-            navData = new NavData(NavDemo.class.getResource("/" + cacFile).getFile(), true);
+            final NavData navData = new NavData(NavDemo.class.getResource("/" + params.getCacFile()).getFile(), true);
+            NavDataProvider.setNavData(navData);
         } catch (Exception e) {
-            e.printStackTrace();
-            throw new RuntimeException(e); //TODO
+            throw new RuntimeException("Fehler beim Erstellen der Navdata", e);
         }
     }
 
     private void run() {
-        final Crossing startCrossing = new Crossing(navData, Double.valueOf(latitude).intValue(),
-                Double.valueOf(longitude).intValue());
-        final List<Punkt> erreichbareCrossings = ermittleErreichbareCrossings(startCrossing);
-        final List<double[]> konkaveHuelle = erzeugeKonkaveHuelle(erreichbareCrossings);
-        final List<Domain> erreichbareDomains;
+        final Crossing startCrossing = new Crossing(Double.valueOf(params.getLatitude()).intValue(),
+                Double.valueOf(params.getLongitude()).intValue());
+        final List<Coordinate> reachableCrossings = computeReachableCrossings(startCrossing);
+        final List<double[]> concaveHull = createConcaveHull(reachableCrossings);
+        final List<Domain> reachableDomains;
         try {
-            erreichbareDomains = ermittleErreichbareDomains(konkaveHuelle);
-        } catch (SQLException | ParseException e) {
-            throw new RuntimeException(e);
+            reachableDomains = computeReachableDomains(concaveHull);
+        } catch (final SQLException | ParseException e) {
+            throw new RuntimeException("Fehler beim ermitteln der erreichbaren Domains", e);
         }
-        erzeugeKarte(startCrossing, konkaveHuelle, erreichbareDomains); //TODO startcrossing oder übergebene koords?
+        writeMap(startCrossing, concaveHull, reachableDomains);
     }
 
-    private List<Punkt> ermittleErreichbareCrossings(final Crossing startCrossing) {
-        final Timer timer = Timer.start("ermittleErreichbareCrossings");
+    private List<Coordinate> computeReachableCrossings(final Crossing startCrossing) {
+        final Timer timer = Timer.start("computeReachableCrossings");
 
-        final List<Punkt> erreichbarePunkte = new ArrayList<>();
-        erreichbarePunkte.add(startCrossing);
+        final List<Coordinate> reachableCoordinates = new ArrayList<>();
+        startCrossing.setCostFromStart(0);
+        reachableCoordinates.add(startCrossing);
 
         final PriorityQueue<Crossing> queue = new PriorityQueue<>((o1, o2)
-                -> Double.compare(o1.getKostenVonStart(), o2.getKostenVonStart()));
+                -> Double.compare(o1.getCostFromStart(), o2.getCostFromStart()));
         queue.add(startCrossing);
 
-        startCrossing.setKostenVonStart(0);
         do {
-            final Crossing aktuell = queue.poll();
-            expand(queue, erreichbarePunkte, aktuell);
-            aktuell.closed = true;
+            final Crossing currentCrossing = queue.poll();
+            expand(queue, reachableCoordinates, currentCrossing);
+            currentCrossing.setClosed(true);
         } while (!queue.isEmpty());
 
         timer.stop();
-        System.out.println("Anzahl erreichbarer Crossings: " + erreichbarePunkte.size());
-        return erreichbarePunkte;
+        System.out.println("Anzahl erreichbarer Crossings: " + reachableCoordinates.size());
+        return reachableCoordinates;
     }
 
     private void expand(final PriorityQueue<Crossing> open,
-            final List<Punkt> erreichbarePunkte, final Crossing aktuell) {
-        for (final Crossing nachbar : aktuell.getNachbarn()) {
-            if (nachbar.closed) {
+            final List<Coordinate> reachableCoordinates, final Crossing currentCrossing) {
+        for (final Crossing neighbour : currentCrossing.getNeighbours()) {
+            if (neighbour.isClosed()) {
                 continue;
             }
-            double kostenZuNachbarn = aktuell.getKostenZuNachbar(nachbar);
-            double kostenVonStartzuNachbarn = aktuell.getKostenVonStart() + kostenZuNachbarn;
-            if (kostenVonStartzuNachbarn < nachbar.getKostenVonStart()) {
-                nachbar.setKostenVonStart(kostenVonStartzuNachbarn);
+            final double costToNeighbour = currentCrossing.getCostToNeighbour(neighbour);
+            final double costFromStartOverCurrentToNeighbour = currentCrossing.getCostFromStart() + costToNeighbour;
+            if (costFromStartOverCurrentToNeighbour < neighbour.getCostFromStart()) {
+                neighbour.setCostFromStart(costFromStartOverCurrentToNeighbour);
             }
-            if (open.contains(nachbar)) {
+            if (open.contains(neighbour)) {
                 continue;
             }
-            if (nachbar.getKostenVonStart() > sekunden) {
-                crossingListeStart.add(aktuell);
-                crossingListeEnde.add(nachbar);
-
-
-                final Link linkZuNachbar = aktuell.getLinkZuNachbar(nachbar);
-                final double[][] geometriepunkte = linkZuNachbar.getGeometriepunkte();
-                final double[] longs = geometriepunkte[0];
-                final double[] lats = geometriepunkte[1];
-
+            if (neighbour.getCostFromStart() > params.getSeconds()) {
+                final Link linkToNeighbour = currentCrossing.getLinkToNeighbour(neighbour);
+                final double[][] points = linkToNeighbour.getPoints();
+                final double[] longs = points[0];
+                final double[] lats = points[1];
                 for (int i = 0; i < longs.length - 1; i++) {
-                    final GeometriePunkt gp = new GeometriePunkt(lats[i], longs[i]);
-                    if (aktuell.getKostenVonStart() + gp.getKostenZuPunkt(lats[i], longs[i], linkZuNachbar.getSpeed() / 1.33) <= sekunden) { //TODO speed param
-                        erreichbarePunkte.add(gp);
-                        geometriePunkteListe.add(new Pair<>(lats[i], longs[i]));
+                    final Point point = new Point(lats[i], longs[i]);
+                    if (currentCrossing.getCostFromStart() + point.getCostToPoint(lats[i], longs[i], linkToNeighbour.getSpeed() / 1.33) <= params.getSeconds()) { //TODO speed param
+                        reachableCoordinates.add(point);
                     }
                 }
-
-
                 continue;
             }
-            open.add(nachbar);
-            erreichbarePunkte.add(nachbar);
+            open.add(neighbour);
+            reachableCoordinates.add(neighbour);
         }
     }
 
-    boolean b = true;
-
-    //TODO
-    List<Pair<Double, Double>> geometriePunkteListe = new ArrayList<>();
-    List<Crossing> crossingListeStart = new ArrayList<>();
-    List<Crossing> crossingListeEnde = new ArrayList<>();
-
-    private List<double[]> erzeugeKonkaveHuelle(final List<Punkt> erreichbareCrossings) {
-        final Timer timer = Timer.start("erzeugeKonkaveHuelle");
-        final ArrayList<double[]> demoPoints = new ArrayList<>();
-        for (final Punkt punkt : erreichbareCrossings) {
-            double lon = punkt.getLongitude();
-            double lat = punkt.getLatitude();
-            demoPoints.add(new double[]{lon, lat});
+    private List<double[]> createConcaveHull(final List<Coordinate> erreichbareCrossings) {
+        final Timer timer = Timer.start("createConcaveHull");
+        final ArrayList<double[]> points = new ArrayList<>();
+        for (final Coordinate coordinate : erreichbareCrossings) {
+            double lon = coordinate.getLongitude();
+            double lat = coordinate.getLatitude();
+            points.add(new double[]{lon, lat});
         }
-
-        final ArrayList<double[]> concaveHull = ConcaveHullGenerator.concaveHull(demoPoints, 0.1d);//TODO parameter anpassne
+        final ArrayList<double[]> concaveHull = ConcaveHullGenerator.concaveHull(points, 0.1d);//TODO parameter anpassne
         timer.stop();
         return concaveHull;
     }
 
-    private List<Domain> ermittleErreichbareDomains(final List<double[]> konkaveHuelle) throws SQLException, ParseException {
-        final Timer timer = Timer.start("ermittleErreichbareDomains");
-        final Coordinate[] coords = new Coordinate[konkaveHuelle.size()];
-        for (int i = 0; i < konkaveHuelle.size(); i++) {
-            final double[] doubles = konkaveHuelle.get(i);
-            coords[i] = new Coordinate(doubles[0], doubles[1]);
+    private List<Domain> computeReachableDomains(final List<double[]> concaveHull) throws SQLException, ParseException {
+        final Timer timer = Timer.start("computeReachableDomains");
+        final com.vividsolutions.jts.geom.Coordinate[] geomCords = new com.vividsolutions.jts.geom.Coordinate[concaveHull.size()];
+        for (int i = 0; i < concaveHull.size(); i++) {
+            final double[] doubles = concaveHull.get(i);
+            geomCords[i] = new com.vividsolutions.jts.geom.Coordinate(doubles[0], doubles[1]);
         }
 
-        final GeometryFactory geomfact = new GeometryFactory();
-        final Geometry polygon = geomfact.createPolygon(geomfact.createLinearRing(coords), new LinearRing[0]);
+        final GeometryFactory geometryFactory = new GeometryFactory();
+        final Geometry polygon = geometryFactory.createPolygon(geometryFactory.createLinearRing(geomCords), new LinearRing[0]);
 
-        Envelope boundingBox = polygon.getEnvelopeInternal(); // Bounding Box berechnen
+        final Envelope boundingBox = polygon.getEnvelopeInternal(); // Bounding Box berechnen
 
         Connection connection = null;
         ResultSet resultSet;
         Statement statement;
 
         try {
-            DBUtil.parseDBparams("geosrv.informatik.fh-nuernberg.de/5432/dbuser/dbuser/deproDB20");
+            DBUtil.parseDBparams(params.getDbAccess());
             connection = DBUtil.getConnection();
             connection.setAutoCommit(false);
             LSIClassCentreDB.initFromDB(connection);
-        } catch (Exception e) {
-            System.out.println("Error initialising DB access: " + e.toString());
-            e.printStackTrace();
-            System.exit(1);
+        } catch (final Exception e) {
+            throw new RuntimeException("Fehler beim initialisieren der Datenbank", e);
         }
 
         statement = connection.createStatement();
         statement.setFetchSize(1000);
-//        int[] lcStrassen=LSIClassCentreDB.lsiClassRange("STRASSEN_WEGE");
-//        fromLSI = lcStrassen[0];
-//        toLSI = lcStrassen[1];
-
-        resultSet = statement.executeQuery("SELECT realname, gao_geometry FROM domain WHERE geometry='P' AND lsiclass1 BETWEEN " + fromLSI + " AND " + toLSI + " AND" +
+        resultSet = statement.executeQuery("SELECT realname, gao_geometry FROM domain WHERE geometry='P' AND lsiclass1 BETWEEN " + params.getFromLSI() + " AND " + params.getToLSI() + " AND" +
                 SQL.createIndexQuery(boundingBox.getMinX(), boundingBox.getMaxY(), boundingBox.getMaxX(), boundingBox.getMinY(), SQL.COMPLETELY_INSIDE)
         );
 
         final List<Domain> domains = new ArrayList<>();
 
         while (resultSet.next()) {
-            String realname = resultSet.getString(1);
-            byte[] geodata_line = resultSet.getBytes(2);
-            Geometry geom = SQL.wkb2Geometry(geodata_line);
+            final String realname = resultSet.getString(1);
+            final byte[] gao_geometry = resultSet.getBytes(2);
+            final Geometry geometry = SQL.wkb2Geometry(gao_geometry);
 
-            if (geom.within(polygon)) {                       // Exact geometrisch testen, ob die Geometry im Dreieck liegt
-//                dumpGeometry(geom);
-//                domains.add(new Domain(realname, geom));
-                final double latitude = geom.getCentroid().getY();
-                final double longitude = geom.getCentroid().getX();
+            if (geometry.within(polygon)) { // Exact geometrisch testen, ob die Geometry im Dreieck liegt
+//                dumpGeometry(geometry); //TODO ??
+                final double latitude = geometry.getCentroid().getY();
+                final double longitude = geometry.getCentroid().getX();
                 domains.add(new Domain(realname, latitude, longitude));
             }
         }
@@ -241,48 +192,29 @@ public class Isochrone {
     }
 
 
-    private void erzeugeKarte(final Crossing startCrossing, final List<double[]> konkaveHuelle, final List<Domain> erreichbareDomains) {
-        final Timer timer = Timer.start("erzeugeKarte");
+    //TODO Start zeichnen
+    private void writeMap(final Crossing startCrossing, final List<double[]> concaveHull, final List<Domain> reachableDomains) {
+        final Timer timer = Timer.start("writeMap");
         try {
-            UniversalPainterWriter upw = new UniversalPainterWriter("result.txt");
+            final UniversalPainterWriter writer = new UniversalPainterWriter("result.txt");
 
-            Coordinate[] coordinates = new Coordinate[]{};
-            for (double[] koords : konkaveHuelle) {
-                coordinates = upsizeArray(coordinates, new Coordinate(koords[0], koords[1]));
+            com.vividsolutions.jts.geom.Coordinate[] geomCords = new com.vividsolutions.jts.geom.Coordinate[]{};
+            for (final double[] koords : concaveHull) {
+                geomCords = upsizeArray(geomCords, new com.vividsolutions.jts.geom.Coordinate(koords[0], koords[1]));
             }
-            Geometry geo = new GeometryFactory().createPolygon(coordinates);
+            final Geometry geometry = new GeometryFactory().createPolygon(geomCords);
 
-            upw.jtsGeometry(geo, 255, 255, 255, 100, 4, 4, 4);
+            writer.jtsGeometry(geometry, 255, 255, 255, 100, 4, 4, 4);
 
-
-            //double[] lats = new double[]{};
-            //double[] longs = new double[]{};
-            //for (double[] koords: konkaveHuelle) {
-            //   upsizeArray(lats, koords[0]);
-            //    upsizeArray(longs, koords[1]);
-            //}
-
-            ArrayList huelle = (ArrayList) konkaveHuelle;
-            //upw.line(lats,longs,0,255,0,200,4,3,"Start","...Route...","End");
-            upw.line(huelle, 0, 255, 0, 200, 4, 3, "Start", "...Route...", "End");
-            for (Domain domain : erreichbareDomains) {
-                upw.flag(domain.getLatitude(), domain.getLongitude(), 255, 0, 0, 255, domain.getName());
+            //TODO ?
+            final ArrayList concaveHullAL = (ArrayList) concaveHull;
+            writer.line(concaveHullAL, 0, 255, 0, 200, 4, 3, "Start", "...Route...", "End"); //TODO start route end
+            for (final Domain domain : reachableDomains) {
+                writer.flag(domain.getLatitude(), domain.getLongitude(), 255, 0, 0, 255, domain.getName());
             }
-            for (Pair<Double, Double> pair : geometriePunkteListe) {
-                upw.flag(pair.getKey(), pair.getValue(), 0, 255, 0, 120, "GP");
-            }
-            for (Crossing c : crossingListeStart) {
-                upw.flag(c.getLatitude() / 1000000.0, c.getLongitude() / 1000000.0, 0, 0, 255, 255, "S");
-            }
-            for (Crossing c : crossingListeEnde) {
-                upw.flag(c.getLatitude() / 1000000.0, c.getLongitude() / 1000000.0, 0, 0, 0, 255, "E");
-            }
-
-            upw.close();
-
+            writer.close();
         } catch (IOException e) {
-            e.printStackTrace();
-            throw new RuntimeException("TODO"); //TODO
+            throw new RuntimeException("Fehler beim Zeichnen der Karte!", e);
         }
         timer.stop();
     }

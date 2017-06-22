@@ -1,18 +1,12 @@
 package lebr;
 
-import com.vividsolutions.jts.geom.Geometry;
-
-public class Domain {
+public class Domain implements Coordinate {
 
     private final String name;
-    private Geometry geometry;
+    private final double latitude;
+    private final double longitude;
 
-    public Domain(final String name, final Geometry geometry) {
-        this.name = name;
-        this.geometry = geometry;
-    }
-
-    public Domain(final String name, double latitude, double longitude) {
+    public Domain(final String name, final double latitude, final double longitude) {
         this.name = name;
         this.latitude = latitude;
         this.longitude = longitude;
@@ -22,27 +16,14 @@ public class Domain {
         return name;
     }
 
-    public Geometry getGeometry() {
-        return geometry;
-    }
-
-    private double latitude;
-    private double longitude;
-
+    @Override
     public double getLatitude() {
         return latitude;
     }
 
+    @Override
     public double getLongitude() {
         return longitude;
-    }
-
-    public void setLatitude(double latitude) {
-        this.latitude = latitude;
-    }
-
-    public void setLongitude(double longitude) {
-        this.longitude = longitude;
     }
 
 }

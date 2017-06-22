@@ -1,115 +1,115 @@
 package lebr;
 
-import nav.NavData;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class Crossing implements Punkt {
+public class Crossing implements Coordinate {
 
     private static final Map<Integer, Crossing> cache = new HashMap<>();
 
-    boolean closed = false;
-
     private final int id;
-    private final NavData navData;
-    private double kostenVonStart = Integer.MAX_VALUE;
+    private boolean closed = false;
+    private double costFromStart = Integer.MAX_VALUE;
 
-    public static Crossing newCrossing(int id, NavData navData){
+    public static Crossing getCrossing(int id) {
         final Crossing crossing = cache.get(id);
-        if(crossing != null){
+        if (crossing != null) {
             return crossing;
         }
-        final Crossing newCrossing = new Crossing(id, navData);
+        final Crossing newCrossing = new Crossing(id);
         cache.put(id, newCrossing);
         return newCrossing;
     }
 
-    public Crossing(final NavData navData, final int latitude, final int longitude) {
-        this.navData = navData;
-        this.id = navData.getNearestCrossing(latitude, longitude);
+    public Crossing(final int latitude, final int longitude) {
+        this.id = NavDataProvider.getNavData().getNearestCrossing(latitude, longitude);
         cache.put(this.id, this);
     }
 
-    private Crossing(final int id, final NavData navData) {
+    private Crossing(final int id) {
         this.id = id;
-        this.navData = navData;
     }
 
     public List<Link> getLinks() {
         final List<Link> links = new ArrayList<>();
-        final int[] linksForCrossing = navData.getLinksForCrossing(id);
+        final int[] linksForCrossing = NavDataProvider.getNavData().getLinksForCrossing(id);
         for (final int linkId : linksForCrossing) {
-            links.add(Link.newLink(linkId, navData));
+            links.add(Link.getLink(linkId));
         }
         return links;
     }
 
-    public Link getLinkZuNachbar(final Crossing nachbar){
+    public Link getLinkToNeighbour(final Crossing neighbour) {
         final List<Link> links = getLinks();
         for (final Link link : links) {
-            if(link.getTo().equals(nachbar)){
+            if (link.getTo().equals(neighbour)) {
                 return link;
             }
-            if(link.getFrom().equals(nachbar)){
+            if (link.getFrom().equals(neighbour)) {
                 return link.getReverseLink();
             }
         }
-        return null;
+        throw new RuntimeException("Kein Link von Crossing " + id + " zu Crossing " + neighbour.id + " vorhanden!");
     }
 
     @Override
     public double getLatitude() {
-        return navData.getCrossingLatE6(id) / 1000000.0;
+        return NavDataProvider.getNavData().getCrossingLatE6(id) / 1000000.0; //TODO di
     }
 
     @Override
     public double getLongitude() {
-        return navData.getCrossingLongE6(id) / 1000000.0;
+        return NavDataProvider.getNavData().getCrossingLongE6(id) / 1000000.0; //TODO di
     }
 
     //TODO Einbahnstraßen?
-    public List<Crossing> getNachbarn() {
-        final List<Crossing> nachbarn = new ArrayList<>();
-
-        final int[] linkIds = navData.getLinksForCrossing(id);
-        for (int linkId : linkIds) {
-            final Link link = Link.newLink(linkId, navData);
+    public List<Crossing> getNeighbours() {
+        final List<Crossing> neighbours = new ArrayList<>();
+        final int[] linkIds = NavDataProvider.getNavData().getLinksForCrossing(id);
+        for (final int linkId : linkIds) {
+            final Link link = Link.getLink(linkId);
             if (!link.getFrom().equals(this)) {
-                nachbarn.add(link.getFrom());
+                neighbours.add(link.getFrom());
             } else if (!link.getTo().equals(this)) {
-                nachbarn.add(link.getTo());
+                neighbours.add(link.getTo());
             }
         }
-        return nachbarn;
+        return neighbours;
     }
 
-    public double getKostenVonStart() {
-        return kostenVonStart;
+    public double getCostFromStart() {
+        return costFromStart;
     }
 
-    public void setKostenVonStart(final double kostenVonStart) {
-        this.kostenVonStart = kostenVonStart;
+    public void setCostFromStart(final double costFromStart) {
+        this.costFromStart = costFromStart;
     }
 
-    public double getKostenZuNachbar(final Crossing nachbar) {
-        final int[] linksForCrossing = navData.getLinksForCrossing(id);
-        for (int linkId : linksForCrossing) {
-            final Link link = Link.newLink(linkId, navData);
-            if (link.getFrom().equals(nachbar) || link.getTo().equals(nachbar)) {
-                return link.getKosten();
+    public double getCostToNeighbour(final Crossing neighbour) {
+        final int[] linksForCrossing = NavDataProvider.getNavData().getLinksForCrossing(id);
+        for (final int linkId : linksForCrossing) {
+            final Link link = Link.getLink(linkId);
+            if (link.getFrom().equals(neighbour) || link.getTo().equals(neighbour)) {
+                return link.getCost();
             }
         }
-        return 0; //TODO
+        throw new RuntimeException("Kein Link von Crossing " + id + " zu Crossing " + neighbour.id + " vorhanden!");
+    }
+
+    public boolean isClosed() {
+        return closed;
+    }
+
+    public void setClosed(final boolean closed) {
+        this.closed = closed;
     }
 
     @Override
     public boolean equals(final Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-
         final Crossing crossing = (Crossing) o;
         return id == crossing.id;
     }
