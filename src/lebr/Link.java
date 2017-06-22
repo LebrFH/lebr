@@ -46,7 +46,7 @@ public class Link {
     private double[] toDoubleArray(final int[] intArray) {
         final double[] doubleArray = new double[intArray.length];
         for (int i = 0; i < intArray.length; i++) {
-            doubleArray[i] = intArray[i] / 1000000.0; //TODO di
+            doubleArray[i] = intArray[i] / 1000000.0;
         }
         return doubleArray;
     }

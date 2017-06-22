@@ -23,8 +23,8 @@ public class Crossing implements Coordinate {
         return newCrossing;
     }
 
-    public Crossing(final int latitude, final int longitude) {
-        this.id = NavDataProvider.getNavData().getNearestCrossing(latitude, longitude);
+    public Crossing(final double latitude, final double longitude) {
+        this.id = NavDataProvider.getNavData().getNearestCrossing((int)(latitude * 1000000), (int) (longitude* 1000000));
         cache.put(this.id, this);
     }
 
@@ -56,12 +56,12 @@ public class Crossing implements Coordinate {
 
     @Override
     public double getLatitude() {
-        return NavDataProvider.getNavData().getCrossingLatE6(id) / 1000000.0; //TODO di
+        return NavDataProvider.getNavData().getCrossingLatE6(id) / 1000000.0;
     }
 
     @Override
     public double getLongitude() {
-        return NavDataProvider.getNavData().getCrossingLongE6(id) / 1000000.0; //TODO di
+        return NavDataProvider.getNavData().getCrossingLongE6(id) / 1000000.0;
     }
 
     //TODO Einbahnstraßen?

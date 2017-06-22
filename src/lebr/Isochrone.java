@@ -58,8 +58,7 @@ public class Isochrone {
     }
 
     private void run() {
-        final Crossing startCrossing = new Crossing(Double.valueOf(params.getLatitude()).intValue(),
-                Double.valueOf(params.getLongitude()).intValue());
+        final Crossing startCrossing = new Crossing(params.getLatitude(),params.getLongitude());
         final List<Coordinate> reachableCrossings = computeReachableCrossings(startCrossing);
         final List<double[]> concaveHull = createConcaveHull(reachableCrossings);
         final List<Domain> reachableDomains;
@@ -200,6 +199,7 @@ public class Isochrone {
 
             com.vividsolutions.jts.geom.Coordinate[] geomCords = new com.vividsolutions.jts.geom.Coordinate[]{};
             for (final double[] koords : concaveHull) {
+                //TODO wieso nicht mit initialer größe == liste?
                 geomCords = upsizeArray(geomCords, new com.vividsolutions.jts.geom.Coordinate(koords[0], koords[1]));
             }
             final Geometry geometry = new GeometryFactory().createPolygon(geomCords);

@@ -36,8 +36,8 @@ public class Params {
         }
         dbAccess = args[0];
         cacFile = args[1];
-        latitude = Double.parseDouble(args[2]) * 1000000; //TODO di
-        longitude = Double.parseDouble(args[3]) * 1000000; //TODO di
+        latitude = Double.parseDouble(args[2]);
+        longitude = Double.parseDouble(args[3]);
         seconds = Integer.parseInt(args[4]) * 60; // Uebergeben werden Minuten
         fromLSI = Integer.parseInt(args[5]);
         toLSI = Integer.parseInt(args[6]);
