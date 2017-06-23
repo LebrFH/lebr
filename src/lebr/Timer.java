@@ -1,9 +1,14 @@
 package lebr;
 
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
 public class Timer {
 
     private final String text;
     private long start;
+    private DateFormat dateFormat = new SimpleDateFormat("HH:mm:ss.SSS");
 
     public Timer(final String text){
         this.text = text;
@@ -17,7 +22,7 @@ public class Timer {
 
     public void start(){
         start = System.currentTimeMillis();
-        System.out.println("Timer \"" + text + "\" gestartet.");
+        System.out.println("Timer \"" + text + "\" gestartet: " + dateFormat.format(new Date(start)));
     }
 
     public void stop(){

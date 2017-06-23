@@ -20,10 +20,4 @@ public class Point implements Coordinate {
         return longitude;
     }
 
-    public double getCostToPoint(final double latitude, final double longitude, final double speed){
-        final double a = Math.abs(this.latitude - latitude);
-        final double b = Math.abs(this.longitude - longitude);
-        final double c = Math.sqrt(Math.pow(a, 2) + Math.pow(b, 2));
-        return c / speed;
-    }
 }

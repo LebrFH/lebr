@@ -52,13 +52,13 @@ public class Isochrone {
         try {
             final NavData navData = new NavData(NavDemo.class.getResource("/" + params.getCacFile()).getFile(), true);
             NavDataProvider.setNavData(navData);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new RuntimeException("Fehler beim Erstellen der Navdata", e);
         }
     }
 
     private void run() {
-        final Crossing startCrossing = new Crossing(params.getLatitude(),params.getLongitude());
+        final Crossing startCrossing = new Crossing(params.getLatitude(), params.getLongitude());
         final List<Coordinate> reachableCrossings = computeReachableCrossings(startCrossing);
         final List<double[]> concaveHull = createConcaveHull(reachableCrossings);
         final List<Domain> reachableDomains;
@@ -95,7 +95,16 @@ public class Isochrone {
     private void expand(final PriorityQueue<Crossing> open,
             final List<Coordinate> reachableCoordinates, final Crossing currentCrossing) {
         for (final Crossing neighbour : currentCrossing.getNeighbours()) {
+            final Link linkToNeighbour = currentCrossing.getLinkToNeighbour(neighbour);
             if (neighbour.isClosed()) {
+                // Sonderfall 3 mitbeachten
+                if (!linkToNeighbour.goesCounterWay()) {
+                    reachableCoordinates.addAll(linkToNeighbour.getReachablePoints(params.getSeconds() - currentCrossing.getCostFromStart()));
+                }
+                final Link reverseLink = linkToNeighbour.getReverseLink();
+                if (!reverseLink.goesCounterWay()) {
+                    reachableCoordinates.addAll(reverseLink.getReachablePoints(params.getSeconds() - currentCrossing.getCostFromStart()));
+                }
                 continue;
             }
             final double costToNeighbour = currentCrossing.getCostToNeighbour(neighbour);
@@ -103,22 +112,27 @@ public class Isochrone {
             if (costFromStartOverCurrentToNeighbour < neighbour.getCostFromStart()) {
                 neighbour.setCostFromStart(costFromStartOverCurrentToNeighbour);
             }
-            if (open.contains(neighbour)) {
+
+
+            if (neighbour.getCostFromStart() > params.getSeconds()) {
+                // Sonderfall 1
+                reachableCoordinates.addAll(linkToNeighbour.getReachablePoints(params.getSeconds() - currentCrossing.getCostFromStart()));
                 continue;
             }
-            if (neighbour.getCostFromStart() > params.getSeconds()) {
-                final Link linkToNeighbour = currentCrossing.getLinkToNeighbour(neighbour);
+            //Sonderfall 2
+            if (linkToNeighbour.getLength() > 500) {
                 final double[][] points = linkToNeighbour.getPoints();
                 final double[] longs = points[0];
                 final double[] lats = points[1];
-                for (int i = 0; i < longs.length - 1; i++) {
+                for (int i = 0; i < longs.length; i++) {
                     final Point point = new Point(lats[i], longs[i]);
-                    if (currentCrossing.getCostFromStart() + point.getCostToPoint(lats[i], longs[i], linkToNeighbour.getSpeed() / 1.33) <= params.getSeconds()) { //TODO speed param
-                        reachableCoordinates.add(point);
-                    }
+                    reachableCoordinates.add(point);
                 }
+            }
+            if (open.contains(neighbour)) {
                 continue;
             }
+
             open.add(neighbour);
             reachableCoordinates.add(neighbour);
         }
@@ -132,7 +146,8 @@ public class Isochrone {
             double lat = coordinate.getLatitude();
             points.add(new double[]{lon, lat});
         }
-        final ArrayList<double[]> concaveHull = ConcaveHullGenerator.concaveHull(points, 0.1d);//TODO parameter anpassne
+        //TODO parameter anpassen
+        final ArrayList<double[]> concaveHull = ConcaveHullGenerator.concaveHull(points, 0.01d);
         timer.stop();
         return concaveHull;
     }
@@ -191,26 +206,24 @@ public class Isochrone {
     }
 
 
-    //TODO Start zeichnen
     private void writeMap(final Crossing startCrossing, final List<double[]> concaveHull, final List<Domain> reachableDomains) {
         final Timer timer = Timer.start("writeMap");
         try {
             final UniversalPainterWriter writer = new UniversalPainterWriter("result.txt");
 
-            com.vividsolutions.jts.geom.Coordinate[] geomCords = new com.vividsolutions.jts.geom.Coordinate[]{};
-            for (final double[] koords : concaveHull) {
-                //TODO wieso nicht mit initialer größe == liste?
-                geomCords = upsizeArray(geomCords, new com.vividsolutions.jts.geom.Coordinate(koords[0], koords[1]));
+            writer.flag(startCrossing.getLatitude(), startCrossing.getLongitude(), 0, 255, 0, 255, "Start");
+
+            com.vividsolutions.jts.geom.Coordinate[] geomCoords = new com.vividsolutions.jts.geom.Coordinate[concaveHull.size()];
+            for (int i = 0; i < concaveHull.size(); i++) {
+                final double[] coords = concaveHull.get(i);
+                geomCoords[i] = new com.vividsolutions.jts.geom.Coordinate(coords[0], coords[1]);
             }
-            final Geometry geometry = new GeometryFactory().createPolygon(geomCords);
+            final Geometry geometry = new GeometryFactory().createPolygon(geomCoords);
 
             writer.jtsGeometry(geometry, 255, 255, 255, 100, 4, 4, 4);
 
-            //TODO ?
-            final ArrayList concaveHullAL = (ArrayList) concaveHull;
-            writer.line(concaveHullAL, 0, 255, 0, 200, 4, 3, "Start", "...Route...", "End"); //TODO start route end
             for (final Domain domain : reachableDomains) {
-                writer.flag(domain.getLatitude(), domain.getLongitude(), 255, 0, 0, 255, domain.getName());
+//                writer.flag(domain.getLatitude(), domain.getLongitude(), 255, 0, 0, 120, domain.getName());
             }
             writer.close();
         } catch (IOException e) {
@@ -219,10 +232,4 @@ public class Isochrone {
         timer.stop();
     }
 
-    static <T> T[] upsizeArray(T[] arr, T element) {
-        final int n = arr.length;
-        arr = Arrays.copyOf(arr, n + 1);
-        arr[n] = element;
-        return arr;
-    }
 }

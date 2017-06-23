@@ -24,7 +24,7 @@ public class Crossing implements Coordinate {
     }
 
     public Crossing(final double latitude, final double longitude) {
-        this.id = NavDataProvider.getNavData().getNearestCrossing((int)(latitude * 1000000), (int) (longitude* 1000000));
+        this.id = NavDataProvider.getNavData().getNearestCrossing((int) (latitude * 1000000), (int) (longitude * 1000000));
         cache.put(this.id, this);
     }
 
@@ -47,9 +47,6 @@ public class Crossing implements Coordinate {
             if (link.getTo().equals(neighbour)) {
                 return link;
             }
-            if (link.getFrom().equals(neighbour)) {
-                return link.getReverseLink();
-            }
         }
         throw new RuntimeException("Kein Link von Crossing " + id + " zu Crossing " + neighbour.id + " vorhanden!");
     }
@@ -64,15 +61,13 @@ public class Crossing implements Coordinate {
         return NavDataProvider.getNavData().getCrossingLongE6(id) / 1000000.0;
     }
 
-    //TODO Einbahnstraßen?
     public List<Crossing> getNeighbours() {
         final List<Crossing> neighbours = new ArrayList<>();
         final int[] linkIds = NavDataProvider.getNavData().getLinksForCrossing(id);
         for (final int linkId : linkIds) {
             final Link link = Link.getLink(linkId);
-            if (!link.getFrom().equals(this)) {
-                neighbours.add(link.getFrom());
-            } else if (!link.getTo().equals(this)) {
+            // Nur wenn nicht entgegen einer Einbahnstrasse
+            if (!link.goesCounterWay()) {
                 neighbours.add(link.getTo());
             }
         }

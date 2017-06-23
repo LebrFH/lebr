@@ -17,7 +17,7 @@ public class Params {
             "CAR_CACHE_mittelfranken_noCC.CAC",
             "49.46591000",
             "11.15800500",
-            "20",
+            "15",
             "20505600",
             "20505699"
     });
