@@ -120,7 +120,7 @@ public class Link {
         final double[][] points = getPoints();
 
         // Punkte sind die beiden Crossings, die den Link umschliessen
-        if(points.length == 2){
+        if(points[0].length == 2){
             return reachablePoints;
         }
 
@@ -135,7 +135,7 @@ public class Link {
             for (int i = 0; i < longs.length - 2; i++) {
                 final Point point = new Point(lats[i], longs[i]);
                 final Point nextPoint = new Point(lats[i + 1], longs[i + 1]);
-                currentCosts += point.getCostToPoint(nextPoint.getLatitude(), nextPoint.getLongitude(), getSpeed());
+                currentCosts += point.getCostToPoint(nextPoint, getSpeed());
                 if (currentCosts <= leftCostLimit) {
                     reachablePoints.add(nextPoint);
                 } else {
@@ -146,7 +146,7 @@ public class Link {
             for (int i = longs.length - 1; i > 1; i--) {
                 final Point point = new Point(lats[i], longs[i]);
                 final Point nextPoint = new Point(lats[i - 1], longs[i - 1]);
-                currentCosts += point.getCostToPoint(nextPoint.getLatitude(), nextPoint.getLongitude(), getSpeed());
+                currentCosts += point.getCostToPoint(nextPoint, getSpeed());
                 if (currentCosts <= leftCostLimit) {
                     reachablePoints.add(nextPoint);
                 } else {
@@ -159,5 +159,9 @@ public class Link {
 
     public Link getReverseLink() {
         return getLink(NavDataProvider.getNavData().getReverseLink(id));
+    }
+
+    public static void clearCache() {
+        cache.clear();
     }
 }

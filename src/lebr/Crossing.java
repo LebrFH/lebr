@@ -108,4 +108,8 @@ public class Crossing implements Coordinate {
         final Crossing crossing = (Crossing) o;
         return id == crossing.id;
     }
+
+    public static void clearCache() {
+        cache.clear();
+    }
 }

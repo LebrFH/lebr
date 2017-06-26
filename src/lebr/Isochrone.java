@@ -22,7 +22,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.PriorityQueue;
 
@@ -57,10 +56,21 @@ public class Isochrone {
         }
     }
 
+    List<Coordinate> tempAlle = new ArrayList<>();
+
     private void run() {
         final Crossing startCrossing = new Crossing(params.getLatitude(), params.getLongitude());
-        final List<Coordinate> reachableCrossings = computeReachableCrossings(startCrossing);
-        final List<double[]> concaveHull = createConcaveHull(reachableCrossings);
+        List<Coordinate> reachableCoordinates = computeReachableCoordinates(startCrossing);
+        tempAlle.addAll(reachableCoordinates);
+        clearCaches();
+//         Wenn mehr als 500.000 Eintraege, nur die aeusseren betrachten
+        if (reachableCoordinates.size() > 500000) {
+            reachableCoordinates = filterReachableCoordinates(reachableCoordinates);
+        }
+//        sonderfall3(reachableCoordinates);
+        System.out.println("nach sonderfall3 " + reachableCoordinates.size());
+//        tempSonderfall = reachableCoordinates;
+        final List<double[]> concaveHull = createConcaveHull(reachableCoordinates);
         final List<Domain> reachableDomains;
         try {
             reachableDomains = computeReachableDomains(concaveHull);
@@ -70,8 +80,33 @@ public class Isochrone {
         writeMap(startCrossing, concaveHull, reachableDomains);
     }
 
-    private List<Coordinate> computeReachableCrossings(final Crossing startCrossing) {
-        final Timer timer = Timer.start("computeReachableCrossings");
+    private void sonderfall3(List<Coordinate> reachableCoordinates) {
+        Timer timer = Timer.start("sonderfall3");
+        // Sonderfall 3 mitbeachten
+        for (Coordinate reachableCoordinate : new ArrayList<>(reachableCoordinates)) {
+            if (reachableCoordinate instanceof Crossing) {
+                Crossing crossing = (Crossing) reachableCoordinate;
+                for (Crossing neighbour : crossing.getNeighbours()) {
+                    final Link linkToNeighbour = crossing.getLinkToNeighbour(neighbour);
+                    if (!linkToNeighbour.goesCounterWay()) {
+                        if (crossing.getCostFromStart() + crossing.getCostToNeighbour(neighbour) > params.getSeconds()) {
+                            reachableCoordinates.addAll(linkToNeighbour.getReachablePoints(params.getSeconds() - crossing.getCostFromStart()));
+                        }
+                    }
+                    final Link reverseLink = linkToNeighbour.getReverseLink();
+                    if (!reverseLink.goesCounterWay()) {
+                        if (crossing.getCostFromStart() + crossing.getCostToNeighbour(neighbour) > params.getSeconds()) {
+                            reachableCoordinates.addAll(reverseLink.getReachablePoints(params.getSeconds() - crossing.getCostFromStart()));
+                        }
+                    }
+                }
+            }
+        }
+        timer.stop();
+    }
+
+    private List<Coordinate> computeReachableCoordinates(final Crossing startCrossing) {
+        final Timer timer = Timer.start("computeReachableCoordinates");
 
         final List<Coordinate> reachableCoordinates = new ArrayList<>();
         startCrossing.setCostFromStart(0);
@@ -88,23 +123,25 @@ public class Isochrone {
         } while (!queue.isEmpty());
 
         timer.stop();
-        System.out.println("Anzahl erreichbarer Crossings: " + reachableCoordinates.size());
+        System.out.println("Anzahl erreichbarer Koordinaten: " + reachableCoordinates.size());
+
         return reachableCoordinates;
     }
 
+    List<Coordinate> tempSonderfall = new ArrayList<>();
+
     private void expand(final PriorityQueue<Crossing> open,
-            final List<Coordinate> reachableCoordinates, final Crossing currentCrossing) {
+                        final List<Coordinate> reachableCoordinates, final Crossing currentCrossing) {
         for (final Crossing neighbour : currentCrossing.getNeighbours()) {
-            final Link linkToNeighbour = currentCrossing.getLinkToNeighbour(neighbour);
             if (neighbour.isClosed()) {
-                // Sonderfall 3 mitbeachten
-                if (!linkToNeighbour.goesCounterWay()) {
-                    reachableCoordinates.addAll(linkToNeighbour.getReachablePoints(params.getSeconds() - currentCrossing.getCostFromStart()));
-                }
-                final Link reverseLink = linkToNeighbour.getReverseLink();
-                if (!reverseLink.goesCounterWay()) {
-                    reachableCoordinates.addAll(reverseLink.getReachablePoints(params.getSeconds() - currentCrossing.getCostFromStart()));
-                }
+//                // Sonderfall 3 mitbeachten
+//                if (!linkToNeighbour.goesCounterWay()) {
+//                    reachableCoordinates.addAll(linkToNeighbour.getReachablePoints(params.getSeconds() - currentCrossing.getCostFromStart()));
+//                }
+//                final Link reverseLink = linkToNeighbour.getReverseLink();
+//                if (!reverseLink.goesCounterWay()) {
+//                    reachableCoordinates.addAll(reverseLink.getReachablePoints(params.getSeconds() - currentCrossing.getCostFromStart()));
+//                }
                 continue;
             }
             final double costToNeighbour = currentCrossing.getCostToNeighbour(neighbour);
@@ -113,22 +150,23 @@ public class Isochrone {
                 neighbour.setCostFromStart(costFromStartOverCurrentToNeighbour);
             }
 
-
+            final Link linkToNeighbour = currentCrossing.getLinkToNeighbour(neighbour);
             if (neighbour.getCostFromStart() > params.getSeconds()) {
                 // Sonderfall 1
                 reachableCoordinates.addAll(linkToNeighbour.getReachablePoints(params.getSeconds() - currentCrossing.getCostFromStart()));
+//                tempSonderfall.addAll(linkToNeighbour.getReachablePoints(params.getSeconds() - currentCrossing.getCostFromStart()));
                 continue;
             }
             //Sonderfall 2
-            if (linkToNeighbour.getLength() > 500) {
-                final double[][] points = linkToNeighbour.getPoints();
-                final double[] longs = points[0];
-                final double[] lats = points[1];
-                for (int i = 0; i < longs.length; i++) {
-                    final Point point = new Point(lats[i], longs[i]);
-                    reachableCoordinates.add(point);
-                }
-            }
+//            if (linkToNeighbour.getLength() > 500) {
+//                final double[][] points = linkToNeighbour.getPoints();
+//                final double[] longs = points[0];
+//                final double[] lats = points[1];
+//                for (int i = 0; i < longs.length; i++) {
+//                    final Point point = new Point(lats[i], longs[i]);
+//                    reachableCoordinates.add(point);
+//                }
+//            }
             if (open.contains(neighbour)) {
                 continue;
             }
@@ -136,6 +174,39 @@ public class Isochrone {
             open.add(neighbour);
             reachableCoordinates.add(neighbour);
         }
+    }
+
+    private void clearCaches() {
+        final Timer timer = Timer.start("clearCaches");
+        Crossing.clearCache();
+        Link.clearCache();
+        timer.stop();
+    }
+
+    private List<Coordinate> filterReachableCoordinates(List<Coordinate> reachableCoordinates) {
+        final Timer timer = Timer.start("filterReachableCoordinates");
+        final List<Coordinate> filtered = new ArrayList<>();
+        long cr = 0;
+        long craussen = 0;
+        long co = 0;
+        for (Coordinate reachableCoordinate : reachableCoordinates) {
+            if (reachableCoordinate instanceof Crossing) {
+                cr++;
+                if (((Crossing) reachableCoordinate).getCostFromStart() > params.getSeconds() * 0.75) {
+                    craussen++;
+                    filtered.add(reachableCoordinate);
+                }
+            } else {
+                co++;
+                filtered.add(reachableCoordinate);
+            }
+        }
+        System.out.println("Cr: " + cr);
+        System.out.println("Crausen: " + craussen);
+        System.out.println("Co: " + co);
+        System.out.println("Size: " + filtered.size());
+        timer.stop();
+        return filtered;
     }
 
     private List<double[]> createConcaveHull(final List<Coordinate> erreichbareCrossings) {
@@ -147,7 +218,7 @@ public class Isochrone {
             points.add(new double[]{lon, lat});
         }
         //TODO parameter anpassen
-        final ArrayList<double[]> concaveHull = ConcaveHullGenerator.concaveHull(points, 0.01d);
+        final ArrayList<double[]> concaveHull = ConcaveHullGenerator.concaveHull(points, 0.0075d);
         timer.stop();
         return concaveHull;
     }
@@ -185,12 +256,10 @@ public class Isochrone {
         );
 
         final List<Domain> domains = new ArrayList<>();
-
         while (resultSet.next()) {
             final String realname = resultSet.getString(1);
             final byte[] gao_geometry = resultSet.getBytes(2);
             final Geometry geometry = SQL.wkb2Geometry(gao_geometry);
-
             if (geometry.within(polygon)) { // Exact geometrisch testen, ob die Geometry im Dreieck liegt
 //                dumpGeometry(geometry); //TODO ??
                 final double latitude = geometry.getCentroid().getY();
@@ -224,6 +293,23 @@ public class Isochrone {
 
             for (final Domain domain : reachableDomains) {
 //                writer.flag(domain.getLatitude(), domain.getLongitude(), 255, 0, 0, 120, domain.getName());
+            }
+//            for (Coordinate coordinate : filtered) {
+//                writer.flag(coordinate.getLatitude(), coordinate.getLongitude(), 255, 0, 0, 120, ".");
+//            }
+            for (Coordinate coordinate : tempSonderfall) {
+//                if (coordinate instanceof Crossing) {
+                    writer.flag(coordinate.getLatitude(), coordinate.getLongitude(), 255, 0, 0, 120, ".");
+//                } else {
+//                    writer.flag(coordinate.getLatitude(), coordinate.getLongitude(), 0, 255, 0, 120, ".");
+//                }
+            }
+            for (Coordinate coordinate : tempAlle) {
+                if (coordinate instanceof Crossing) {
+                    writer.flag(coordinate.getLatitude(), coordinate.getLongitude(), 0, 255, 0, 120, ".");
+//                } else {
+//                    writer.flag(coordinate.getLatitude(), coordinate.getLongitude(), 0, 255, 0, 120, ".");
+                }
             }
             writer.close();
         } catch (IOException e) {

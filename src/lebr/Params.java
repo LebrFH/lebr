@@ -15,9 +15,10 @@ public class Params {
     public static final Params TEST_PARAMS = new Params(new String[]{
             "geosrv.informatik.fh-nuernberg.de/5432/dbuser/dbuser/deproDB20",
             "CAR_CACHE_mittelfranken_noCC.CAC",
+//            "CAR_CACHE_de_noCC.CAC",
             "49.46591000",
             "11.15800500",
-            "15",
+            "5",
             "20505600",
             "20505699"
     });
