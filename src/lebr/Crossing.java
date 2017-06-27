@@ -12,7 +12,6 @@ public class Crossing implements Coordinate {
     private final int id;
     private boolean closed = false;
     private double costFromStart = Integer.MAX_VALUE;
-    private Crossing previous;
 
     public static Crossing getCrossing(int id) {
         final Crossing crossing = cache.get(id);
@@ -108,14 +107,6 @@ public class Crossing implements Coordinate {
         if (o == null || getClass() != o.getClass()) return false;
         final Crossing crossing = (Crossing) o;
         return id == crossing.id;
-    }
-
-    public Crossing getPrevious() {
-        return previous;
-    }
-
-    public void setPrevious(Crossing previous) {
-        this.previous = previous;
     }
 
     public static void clearCache() {

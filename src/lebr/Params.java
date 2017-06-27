@@ -16,9 +16,11 @@ public class Params {
             "geosrv.informatik.fh-nuernberg.de/5432/dbuser/dbuser/deproDB20",
             "CAR_CACHE_mittelfranken_noCC.CAC",
 //            "CAR_CACHE_de_noCC.CAC",
-            "49.46591000",
-            "11.15800500",
-            "50",
+//            "49.46591000",
+//            "11.15800500",
+            "49.524988",
+            "11.146041",
+            "5",
             "20505600",
             "20505699"
     });
@@ -39,7 +41,7 @@ public class Params {
         cacFile = args[1];
         latitude = Double.parseDouble(args[2]);
         longitude = Double.parseDouble(args[3]);
-        seconds = Integer.parseInt(args[4]) * 60; // Uebergeben werden Minuten
+        seconds = 25; //Integer.parseInt(args[4]) * 60; // Uebergeben werden Minuten
         fromLSI = Integer.parseInt(args[5]);
         toLSI = Integer.parseInt(args[6]);
     }
