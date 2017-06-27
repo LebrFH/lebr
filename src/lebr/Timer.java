@@ -4,6 +4,9 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
+/**
+ * Hilfsklasse zur Zeitmessung mit Konsolenausgaben
+ */
 public class Timer {
 
     private final String text;

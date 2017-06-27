@@ -2,20 +2,30 @@ package lebr;
 
 import static java.lang.Math.*;
 
+/**
+ * Interface fuer eine geographische Koordinate.
+ */
 public interface Coordinate {
 
-    //TODO Radius anpassen? kleiner machen
-    public static final double EARTH_RADIUS = 6380000;
+    /**
+     * Mittlerer Erdradius
+     */
+    public static final double EARTH_RADIUS = 6371000;
 
     double getLatitude();
 
     double getLongitude();
 
-    default double getCostToPoint(final Point point, final double speed) {
-        return getCostToPoint(point.getLatitude(), point.getLongitude(), speed);
-    }
+    /**
+     * Ermittelt die Kosten von dieser Koordinate zu einer anderen.
+     * @param coordinate die andere Koordinate
+     * @param speed die Geschwindigkeit
+     * @return die Kosten in Sekunden
+     */
+    default double getCostToCoordinate(final Coordinate coordinate, final double speed) {
+        final double longitude = coordinate.getLongitude();
+        final double latitude = coordinate.getLatitude();
 
-    default double getCostToPoint(final double latitude, final double longitude, final double speed) {
         //Distanz zwischen zwei Koordinaten: Haversine Formel
         final double dLongitude = toRadians(longitude - getLongitude());
         final double dLatitude = toRadians(latitude - getLatitude());

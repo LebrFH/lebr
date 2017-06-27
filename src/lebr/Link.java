@@ -8,17 +8,31 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Klasse fuer einen Link
+ */
 public class Link {
 
+    /**
+     * Link-Cache. <br>
+     * Da wir nur eine ID haben, benoetigen wir die Referenzen auf bereits angelegte Links.
+     */
     private static final Map<Integer, Link> cache = new HashMap<>();
 
     /**
-     * TODO
+     * Geschindigkeitsfaktor. <br>
+     * Korrektur, anhand der Annahme, dass nicht immer mit maximaler Geschwindigkeit gefahren wird.
      */
     private static final double SPEED_FACTOR = 0.8;
 
     private final int id;
 
+    /**
+     * Holt anhand einer ID einen vorhanden Link aus dem Cache oder legt einen neuen an, falls noch nicht gecached.
+     *
+     * @param id die Link-ID
+     * @return der Link zur ID
+     */
     public static Link getLink(int id) {
         final Link link = cache.get(id);
         if (link != null) {
@@ -33,26 +47,17 @@ public class Link {
         this.id = id;
     }
 
-    public boolean goesCounterWay() {
-        return NavDataProvider.getNavData().goesCounterOneway(id);
-    }
-
-    public Crossing getFrom() {
-        final int crossingIDFrom = NavDataProvider.getNavData().getCrossingIDFrom(id);
-        return Crossing.getCrossing(crossingIDFrom);
-    }
-
-    public Crossing getTo() {
-        final int crossingIDTo = NavDataProvider.getNavData().getCrossingIDTo(id);
-        return Crossing.getCrossing(crossingIDTo);
-    }
-
+    /**
+     * Gibt alle Geometriepunkte dieses Links zurueck.
+     * @return die Liste aller Geometriepunkte dieses Links.
+     */
     public double[][] getPoints() {
         final NavData navData = NavDataProvider.getNavData();
         final int domainID = navData.getDomainID(id);
-        final double[] domainLongsE6 = toDoubleArray(navData.getDomainLongsE6(domainID));
-        final double[] domainLatsE6 = toDoubleArray(navData.getDomainLatsE6(domainID));
+        final double[] domainLongsE6 = convertIntCoordinatesToDouble(navData.getDomainLongsE6(domainID));
+        final double[] domainLatsE6 = convertIntCoordinatesToDouble(navData.getDomainLatsE6(domainID));
 
+        // Nur die Punkte dieses Links aus der Domain
         int from = navData.getDomainPosNrFrom(id);
         int to = navData.getDomainPosNrTo(id);
         if (from > to) {
@@ -65,7 +70,12 @@ public class Link {
         return new double[][]{linkLongsE6, linkLatsE6};
     }
 
-    private double[] toDoubleArray(final int[] intArray) {
+    /**
+     * Konvertiert die im Navdata als ints angegeben Koordinaten in double-Werte, wie sie sonst in der Logik verwendet werden.
+     * @param intArray das int-Array
+     * @return das double-Array
+     */
+    private double[] convertIntCoordinatesToDouble(final int[] intArray) {
         final double[] doubleArray = new double[intArray.length];
         for (int i = 0; i < intArray.length; i++) {
             doubleArray[i] = intArray[i] / 1000000.0;
@@ -73,14 +83,10 @@ public class Link {
         return doubleArray;
     }
 
-    public double getCost() {
-        return getLength() / getSpeed();
-    }
-
-    public int getLength() {
-        return NavDataProvider.getNavData().getLengthMeters(id);
-    }
-
+    /**
+     * Ermittelt die Geschwindigkeit dieses Links anhand des Strassen-Typs (LSI-Klasse)
+     * @return die Geschwindigkeit in Metern pro Sekunde unter Beruecksichtigung des Geschw.-Faktors
+     */
     public double getSpeed() {
         double speed = NavDataProvider.getNavData().getMaxSpeedKMperHours(id);
         if (speed == 0) {
@@ -114,18 +120,22 @@ public class Link {
         return speed / 3.6 * SPEED_FACTOR; // Meter pro Sekunde
     }
 
-    public List<Coordinate> getReachablePoints(final double leftCostLimit) {
+    /**
+     * Ermittelt alle erreichbaren Geometriepunkte dieses Links innerhalb eines Kostenlimits
+     * @param costLimit das Kostenlimit
+     * @return eine Liste aller erreichbaren Geometriepunkte
+     */
+    public List<Coordinate> getReachablePoints(final double costLimit) {
         final List<Coordinate> reachablePoints = new ArrayList<>();
-
         final double[][] points = getPoints();
-
-        // Punkte sind die beiden Crossings, die den Link umschliessen
+        // Punkte sind die nur beiden Crossings, die den Link umschliessen
         if(points[0].length == 2){
             return reachablePoints;
         }
 
         final int from = NavDataProvider.getNavData().getDomainPosNrFrom(id);
         final int to = NavDataProvider.getNavData().getDomainPosNrTo(id);
+        // Anhand des from- und to-Index wird festgemacht, in welche Richtung iteriert werden muss
         final boolean reversePoints = from > to;
         final double[] longs = points[0];
         final double[] lats = points[1];
@@ -135,19 +145,20 @@ public class Link {
             for (int i = 0; i < longs.length - 2; i++) {
                 final Point point = new Point(lats[i], longs[i]);
                 final Point nextPoint = new Point(lats[i + 1], longs[i + 1]);
-                currentCosts += point.getCostToPoint(nextPoint, getSpeed());
-                if (currentCosts <= leftCostLimit) {
+                currentCosts += point.getCostToCoordinate(nextPoint, getSpeed());
+                if (currentCosts <= costLimit) {
                     reachablePoints.add(nextPoint);
                 } else {
                     break;
                 }
             }
         } else {
+            // In die entgegengesetzte Richtung
             for (int i = longs.length - 1; i > 1; i--) {
                 final Point point = new Point(lats[i], longs[i]);
                 final Point nextPoint = new Point(lats[i - 1], longs[i - 1]);
-                currentCosts += point.getCostToPoint(nextPoint, getSpeed());
-                if (currentCosts <= leftCostLimit) {
+                currentCosts += point.getCostToCoordinate(nextPoint, getSpeed());
+                if (currentCosts <= costLimit) {
                     reachablePoints.add(nextPoint);
                 } else {
                     break;
@@ -157,11 +168,33 @@ public class Link {
         return reachablePoints;
     }
 
+    public static void clearCache() {
+        cache.clear();
+    }
+
+    public Crossing getFrom() {
+        final int crossingIDFrom = NavDataProvider.getNavData().getCrossingIDFrom(id);
+        return Crossing.getCrossing(crossingIDFrom);
+    }
+
+    public Crossing getTo() {
+        final int crossingIDTo = NavDataProvider.getNavData().getCrossingIDTo(id);
+        return Crossing.getCrossing(crossingIDTo);
+    }
+
+    public double getCost() {
+        return getLength() / getSpeed();
+    }
+
+    public int getLength() {
+        return NavDataProvider.getNavData().getLengthMeters(id);
+    }
+
     public Link getReverseLink() {
         return getLink(NavDataProvider.getNavData().getReverseLink(id));
     }
 
-    public static void clearCache() {
-        cache.clear();
+    public boolean goesCounterWay() {
+        return NavDataProvider.getNavData().goesCounterOneway(id);
     }
 }

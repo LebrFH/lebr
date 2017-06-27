@@ -2,6 +2,9 @@ package lebr;
 
 import nav.NavData;
 
+/**
+ * Klasse fuer ein NavData-Singleton
+ */
 public final class NavDataProvider {
 
     private static NavData navData;

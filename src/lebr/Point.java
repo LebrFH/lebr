@@ -1,5 +1,8 @@
 package lebr;
 
+/**
+ * Einfache Implementierung einer geographischen Koordinate
+ */
 public class Point implements Coordinate {
 
     private final double latitude;

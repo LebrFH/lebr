@@ -1,5 +1,8 @@
 package lebr;
 
+/**
+ * Klasse fuer eine Domain.
+ */
 public class Domain implements Coordinate {
 
     private final String name;

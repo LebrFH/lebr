@@ -5,14 +5,27 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Klasse fuer ein Crossing.
+ */
 public class Crossing implements Coordinate {
 
+    /**
+     * Crossing-Cache. <br>
+     * Da wir nur eine ID haben, benoetigen wir die Referenzen auf bereits angelegte Crossings.
+     */
     private static final Map<Integer, Crossing> cache = new HashMap<>();
 
     private final int id;
     private boolean closed = false;
-    private double costFromStart = Integer.MAX_VALUE;
+    private double costFromStart = Double.MAX_VALUE;
 
+    /**
+     * Holt anhand einer ID ein vorhandenes Crossing aus dem Cache oder legt ein neues an, falls noch nicht gecached.
+     *
+     * @param id die Crossing-ID
+     * @return das Crossing zur ID
+     */
     public static Crossing getCrossing(int id) {
         final Crossing crossing = cache.get(id);
         if (crossing != null) {
@@ -23,13 +36,13 @@ public class Crossing implements Coordinate {
         return newCrossing;
     }
 
+    private Crossing(final int id) {
+        this.id = id;
+    }
+
     public Crossing(final double latitude, final double longitude) {
         this.id = NavDataProvider.getNavData().getNearestCrossing((int) (latitude * 1000000), (int) (longitude * 1000000));
         cache.put(this.id, this);
-    }
-
-    private Crossing(final int id) {
-        this.id = id;
     }
 
     public List<Link> getLinks() {
@@ -51,16 +64,10 @@ public class Crossing implements Coordinate {
         throw new RuntimeException("Kein Link von Crossing " + id + " zu Crossing " + neighbour.id + " vorhanden!");
     }
 
-    @Override
-    public double getLatitude() {
-        return NavDataProvider.getNavData().getCrossingLatE6(id) / 1000000.0;
-    }
-
-    @Override
-    public double getLongitude() {
-        return NavDataProvider.getNavData().getCrossingLongE6(id) / 1000000.0;
-    }
-
+    /**
+     * Ermittelt alle Nachbar-Crossings dieses Crossings, unter Beachtung von Einbahnstrassen.
+     * @return eine Liste aller Nachbar-Crossings
+     */
     public List<Crossing> getNeighbours() {
         final List<Crossing> neighbours = new ArrayList<>();
         final int[] linkIds = NavDataProvider.getNavData().getLinksForCrossing(id);
@@ -74,14 +81,11 @@ public class Crossing implements Coordinate {
         return neighbours;
     }
 
-    public double getCostFromStart() {
-        return costFromStart;
-    }
-
-    public void setCostFromStart(final double costFromStart) {
-        this.costFromStart = costFromStart;
-    }
-
+    /**
+     * Ermittelt die Kosten von diesem Crossing zum uebergebenen Nachbar-Crossing.
+     * @param neighbour das Nachbar-Crossing
+     * @return die Kosten in Sekunden
+     */
     public double getCostToNeighbour(final Crossing neighbour) {
         final int[] linksForCrossing = NavDataProvider.getNavData().getLinksForCrossing(id);
         for (final int linkId : linksForCrossing) {
@@ -93,12 +97,8 @@ public class Crossing implements Coordinate {
         throw new RuntimeException("Kein Link von Crossing " + id + " zu Crossing " + neighbour.id + " vorhanden!");
     }
 
-    public boolean isClosed() {
-        return closed;
-    }
-
-    public void setClosed(final boolean closed) {
-        this.closed = closed;
+    public static void clearCache() {
+        cache.clear();
     }
 
     @Override
@@ -109,7 +109,29 @@ public class Crossing implements Coordinate {
         return id == crossing.id;
     }
 
-    public static void clearCache() {
-        cache.clear();
+    public boolean isClosed() {
+        return closed;
+    }
+
+    public void setClosed(final boolean closed) {
+        this.closed = closed;
+    }
+
+    @Override
+    public double getLatitude() {
+        return NavDataProvider.getNavData().getCrossingLatE6(id) / 1000000.0;
+    }
+
+    @Override
+    public double getLongitude() {
+        return NavDataProvider.getNavData().getCrossingLongE6(id) / 1000000.0;
+    }
+
+    public double getCostFromStart() {
+        return costFromStart;
+    }
+
+    public void setCostFromStart(final double costFromStart) {
+        this.costFromStart = costFromStart;
     }
 }
